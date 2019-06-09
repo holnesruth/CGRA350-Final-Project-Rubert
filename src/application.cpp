@@ -151,8 +151,7 @@ void Application::render() {
 
 	// draw the mesh
 	if (m_current_mode == Shader) {
-		m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius)); 
-		m_show_grid = false;
+		m_model.modelTransform = scale(mat4(1.0), vec3(m_ball_radius)); 
 	} else {
 		m_model.modelTransform = mat4(1.0);
 	}
@@ -257,9 +256,6 @@ void Application::AccumulateForces() {
 			m_points.at(s.index2).force += pressureValue * s.normal;
 		}
 	}
-
-
-
 }
 
 void Application::IntegrateForces() {
