@@ -189,18 +189,6 @@ void Application::AccumulateForces() {
 		Point& p1 = m_points.at(spring.index1);
 		Point& p2 = m_points.at(spring.index2);
 
-		//        if (p1.mass == -1) continue;
-		//        if (p2.mass == -1) continue;
-
-		//            float dist = distance(p1.pos, p2.pos);
-		//            if (dist == 0) continue;
-		//
-		//            vec3 forc = (dist -  spring.length) * m_ks + (p1.vel - p2.vel) * ((p1.pos - p2.pos) / dist) * m_kd;
-		//
-		//            p1.force -= f;
-		//            p2.force += f;
-
-				// ====================================================
 		float x1 = p1.pos.x;	float y1 = p1.pos.y; float z1 = p1.pos.z;
 		float x2 = p2.pos.x;	float y2 = p2.pos.y; float z2 = p2.pos.z;
 
@@ -269,11 +257,11 @@ void Application::IntegrateForces() {
 		//        float lastY = pnt.pos.y;
 		pnt.pos += pnt.vel;
 
-		if (pnt.pos.y <= 0) {
-			pnt.pos.y = 0;
-			// if sliding across the ground
-			pnt.vel.y *= -0.5;
-
+		if (m_current_mode != FullDemo) {
+            if (pnt.pos.y <= 0) {
+                pnt.pos.y = 0;
+                pnt.vel.y *= -0.5;
+            }
 		}
 	}
 }
@@ -596,21 +584,9 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			float dist = computeDistance(objPos, cameraPos, C);
 			cout << "dist: " << dist << endl;
 
-			for (auto& point : m_points) {
-
-			}
-
-
-			int x = 0;
-			//            std::cout << "objPos: x:" << objPos.x << ", y:" << objPos.y << ", z:" << objPos.z << endl;
-			//            std::cout << "cameraPos: x:" << objPos.x << ", y:" << objPos.y << ", z:" << objPos.z << endl;
-
-
-			//
-			//            vec3 mousePos = vec3(m_mousePosition.x, viewport.w - m_mousePosition.y, 0);
-			//            cout << "mouse z: " << mousePos.z << endl;
-			//
-			//            std::cout << "projectedPos: x:" << newPos.x<< ", y:" << newPos.y << ", z:" << newPos.z << endl << endl;
+//			for (auto& point : m_points) {
+//
+//			}
 
 		}
 	}

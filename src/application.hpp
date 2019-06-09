@@ -116,7 +116,7 @@ private:
 
 	enum m_mode { Shader, Simulation, FullDemo };
 	char* m_mode_options[3] = { "Shader", "Simulation", "Full Demo" };
-	int m_current_mode = 0;
+	int m_current_mode = FullDemo;
 
 public:
 	// setup
