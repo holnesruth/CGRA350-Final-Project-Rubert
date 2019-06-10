@@ -20,7 +20,7 @@ SET(sources
 	"main.cpp"
 
 	"CMakeLists.txt"
-)
+        cgra/Softbody.cpp cgra/Softbody.h)
 
 # Add executable target and link libraries
 add_executable(${CGRA_PROJECT} ${sources})

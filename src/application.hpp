@@ -32,11 +32,12 @@ struct basic_model {
 struct Point {
     glm::vec3 pos, vel, force;
     float mass;
+    glm::vec3 norm;
 };
 
 // Soft body springs
 struct Spring {
-    int index1, index2; // indicies for the two pionts on either end of m_spring
+    int index1, index2; // indices for the two points on either end of m_spring
     float length; // rest length
     glm::vec3 normal; // normal vector
 
@@ -116,7 +117,7 @@ private:
 
 	enum m_mode { Shader, Simulation, FullDemo };
 	char* m_mode_options[3] = { "Shader", "Simulation", "Full Demo" };
-	int m_current_mode = FullDemo;
+	int m_current_mode = Simulation;
 
 public:
 	// setup

@@ -120,34 +120,36 @@ void Application::render() {
 
 	double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
-	// if it's time for another simulation step
-	if (millis - m_lastMillis > DT * 1000) {
-		AccumulateForces();
+	if (m_current_mode != Shader){
+        // if it's time for another simulation step
+        if (millis - m_lastMillis > DT * 1000) {
+            AccumulateForces();
 
-		IntegrateForces();
+            IntegrateForces();
 
-		m_model.mesh = constructMesh(m_points, m_springs);
+            m_model.mesh = constructMesh(m_points, m_springs);
 
-		m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+            m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+
+        }
+
+        // draw spheres on all points
+        if (m_showWireframe) {
+            for (auto &point : m_points) {
+                //Point point = m_points.at(0);
+                m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
+                m_model.draw(view, proj, true);
+            }
+        }
 
 	}
 
-	// draw spheres on all points
-	if (m_showWireframe) {
-		for (auto &point : m_points) {
-			//Point point = m_points.at(0);
-			m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
-			m_model.draw(view, proj, true);
-		}
-	}
-
-	if (m_current_mode == Simulation) {
-		m_model.shader = m_shader_default;
-	}
-	else {
-		m_model.shader = m_shader_bubble;
-	}
-
+    if (m_current_mode == Simulation) {
+        m_model.shader = m_shader_default;
+    }
+    else {
+        m_model.shader = m_shader_bubble;
+    }
 
 	// draw the mesh
 	if (m_current_mode == Shader) {
@@ -263,6 +265,7 @@ void Application::IntegrateForces() {
                 pnt.vel.y *= -0.5;
             }
 		}
+		pnt.vel *= 0.99;
 	}
 }
 
@@ -307,8 +310,8 @@ void Application::initializeMesh() {
 	for (auto& meshVertex : mesh.vertices) {
 		vec4 initialPos = vec4(meshVertex.pos.x, meshVertex.pos.y, meshVertex.pos.z, 1);
 		vec4 newPos = initialPositionTransform * initialPos;
-		m_points.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f }));
-		m_restPos.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f }));
+		m_points.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f, meshVertex.norm}));
+		m_restPos.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f, meshVertex.norm}));
 	}
 
 	for (int i = 0; i < mesh.indices.size(); i += 3) {
@@ -374,7 +377,6 @@ cgra::gl_mesh Application::constructMesh(std::vector<Point>& points, std::vector
 
 
 void Application::resetSimulation() {
-	// TODO
 //    vec3 min = vec3(-0.05, 0.1, -0.05);
 //    vec3 max = vec3(0.05, 0.4, 0.05);
 
@@ -386,13 +388,21 @@ void Application::resetSimulation() {
 
 }
 
-
 double computeDistance(vec3 A, vec3 B, vec3 C) {
 	vec3 d = (C - B) / distance(C, B);
 	vec3 v = A - B;
 	float t = dot(v, d);
 	vec3 P = B + (t * d);
 	return distance(A, P);
+}
+
+
+float myMap(float value,float start1, float stop1, float start2, float stop2){
+    float val = start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
+    if (val > stop2)
+        return stop2;
+    else
+        return val;
 }
 
 /**  ========================================== End of My Functions ==========================================*/
@@ -544,10 +554,10 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			// https://stackoverflow.com/a/30005258
 			/** ================================================================================================ */
 			// Normalized Device Coordinates
-			float mouseX = m_mousePosition.x * 3 / (m_windowsize.x * 0.5f) - 1.0f;
+			float mouseX = m_mousePosition.x * 2 / (m_windowsize.x * 0.5f) - 1.0f;
 			float mouseY = m_mousePosition.y * 2 / (m_windowsize.y * 0.5f) - 1.0f;
 
-			mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.x, 0.3f, 1000.f);
+			mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.y, 0.3f, 1000.f);
 			mat4 view = translate(mat4(1), vec3(3, 0, -m_distance))
 				* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
 				* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
@@ -560,38 +570,27 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			glm::vec3 direction = glm::normalize(glm::vec3(worldPos));
 
 			/** ================================================================================================ */
-//            vec3 cameraPos2 = inverse(view) * vec4(0, 0, 0, 1);
 
 			vec4 viewport = vec4(0, 0, m_windowsize.x, m_windowsize.y);
-			vec3 mousePos = vec3(m_mousePosition.x * 3, viewport.w - m_mousePosition.y * 2, 0.01);
+			vec3 mousePos = vec3(m_mousePosition.x * 2, viewport.w - m_mousePosition.y * 2, 0.01);
 
 			vec3 cameraPos = unProject(mousePos, view, proj, viewport);
 
-			vec3 objPos = m_points.at(0).pos;
 			vec3 C = cameraPos + direction * 30.0f;
 
-			uint size = m_mesh.vertices.size() - 1;
-			m_mesh.indices.push_back(size + 1);
-			m_mesh.indices.push_back(size + 2);
-			m_mesh.indices.push_back(size + 3);
 
-			mesh_vertex meshVertex1; meshVertex1.pos = cameraPos; m_mesh.vertices.push_back(meshVertex1);
-			mesh_vertex meshVertex2; meshVertex2.pos = C; m_mesh.vertices.push_back(meshVertex2);
-			mesh_vertex meshVertex3; meshVertex3.pos = C + vec3(0, -0.5, 0); m_mesh.vertices.push_back(meshVertex3);
-
-
-
-			float dist = computeDistance(objPos, cameraPos, C);
-			cout << "dist: " << dist << endl;
-
-//			for (auto& point : m_points) {
-//
-//			}
+			for (auto& point : m_points) {
+			    float dist = computeDistance(point.pos, cameraPos, C);
+                float vel =  1 - myMap(dist, 0, m_ball_radius / 2, 0, 1);
+			    point.vel += direction * vel;
+			}
 
 		}
 	}
 
 }
+
+
 
 
 void Application::scrollCallback(double xoffset, double yoffset) {
