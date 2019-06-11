@@ -56,7 +56,7 @@ int main() {
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
 
 	// create a windowed mode window and its OpenGL context
-	GLFWwindow *window = glfwCreateWindow(800, 600, "Soap Bubbles!", nullptr, nullptr);
+	GLFWwindow *window = glfwCreateWindow(1200, 900, "Soap Bubbles!", nullptr, nullptr);
 	if (!window) {
 		cerr << "Error: Could not create GLFW window" << endl;
 		abort(); // unrecoverable error

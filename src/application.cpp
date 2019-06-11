@@ -68,24 +68,25 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
 
-
+	// ====================== Soft body ==========================
     m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_270.obj"));
     cleanMesh(m_mesh);
-
     m_softbodies.emplace_back();
 
     mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
     m_softbodies.at(0).initializeMesh(m_mesh, initialPositionTransform);
 
-	m_model.shader = m_shader_default;
-
 	for( auto &softbody : m_softbodies){
 	    m_model.mesh = softbody.constructMesh(m_showWireframe);
 	}
-
-	m_model.color = vec3(1, 1, 1);
-
+	createBBox();
+	createGroundplane();
 	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+
+
+    // ====================== Shaders ==========================
+    m_model.shader = m_shader_default;
+	m_model.color = vec3(1, 1, 1);
 
 	// set up the thickness texture
 	rgba_image img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//grad.jpg"));
@@ -130,7 +131,7 @@ void Application::render() {
 	m_model.updateParams(m_min, m_max, m_intensity, m_opacity);
 
 
-    if (m_current_mode == Simulation) {
+    if (m_current_mode == Simulation || m_showWireframe) {
         m_model.shader = m_shader_default;
     }
     else {
@@ -138,66 +139,83 @@ void Application::render() {
     }
 
 
-	if (m_show_grid) drawGrid(view, proj);
+    if (m_show_grid) drawGrid(view, proj);
 	if (m_show_axis) drawAxis(view, proj);
 
     double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
+    // if in shader mode, dont bother with soft bodies
+    if (m_current_mode == Shader) {
+        m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius));
+        m_show_grid = false;
+        drawModel(view, proj);
+        return;
+    }
+
+    /** ============ Simulation Step ====================== */
     if (millis - m_lastMillis > DT * 1000) {
+
+        for (auto &softbody : m_softbodies)
+            softbody.updateCentroid();
+
         for (auto &softbody : m_softbodies) {
             softbody.AccumulateForces();
-            softbody.IntegrateForces(m_current_mode != FullDemo);
+            softbody.IntegrateForces(m_current_mode != FullDemo, m_softbodies, m_ball_radius);
         }
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                 chrono::system_clock::now().time_since_epoch()).count();
     }
 
-
-
+    /** ============ Draw Softbodies ====================== */
     for (auto &softbody : m_softbodies) {
-        if (m_current_mode != Shader) {
-            // if it's time for another simulation step
 
+        m_model.mesh = softbody.constructMesh(m_showWireframe);
 
-
-
-                m_model.mesh = softbody.constructMesh(m_showWireframe);
-
-
-            // draw spheres on all points
-            if (m_showWireframe) {
-                for (auto &point : softbody.m_points) {
-                    m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
-                    m_model.draw(view, proj, true);
-                }
+        // if in wireframe draw spheres on all points
+        if (m_showWireframe) {
+            for (auto &point : softbody.m_points) {
+                m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
+                m_model.draw(view, proj, true);
             }
         }
 
-        // draw the mesh
-        if (m_current_mode == Shader) {
-            m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius));
-            m_show_grid = false;
-        } else {
-            m_model.modelTransform = mat4(1.0);
-        }
+        m_model.modelTransform = mat4(1.0);
 
-        // draw the model
-        glEnable(GL_CULL_FACE);
-        glCullFace(GL_FRONT);
+        drawModel(view, proj);
 
-        m_model.leParams.y *= m_intensity;
-        m_model.draw(view, proj, (m_current_mode == Shader));
-
-        glCullFace(GL_BACK);
-
-        m_model.leParams.y = m_opacity;
-        m_model.draw(view, proj, (m_current_mode == Shader));
     }
+
+    m_model.shader = m_shader_default;
+
+    // draw bounding box
+    m_model.mesh = m_bbox_mesh;
+    drawModel(view, proj);
+
+    // if in sim mode, draw the ground plane
+    if (m_current_mode == Simulation) {
+        m_model.mesh = m_ground_plane_mesh;
+    }
+    drawModel(view, proj);
+
 
 }
 
 
-/**  ========================================== My Functions ==========================================*/
+/**  ========================================== Robert Functions ==========================================*/
+
+void Application::drawModel(mat4 &view, mat4 &proj){
+
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+
+    m_model.leParams.y *= m_intensity;
+    m_model.draw(view, proj, (m_current_mode == Shader));
+
+    glCullFace(GL_BACK);
+
+    m_model.leParams.y = m_opacity;
+    m_model.draw(view, proj, (m_current_mode == Shader));
+}
 
 void Application::cleanMesh(mesh_builder &mesh){
     /** ============== Clean up the mesh data ============== */
@@ -232,8 +250,98 @@ void Application::cleanMesh(mesh_builder &mesh){
     }
 }
 
+void Application::addNewSoftbody(glm::mat4 initialTransform){
+    m_softbodies.emplace_back();
+    m_softbodies.back().initializeMesh(m_mesh, initialTransform);
+    if (m_softbodies.size() > 10){
+        m_softbodies.erase(m_softbodies.begin());
+    }
+    m_softbodies.back().m_gravity = m_gravity;
+    m_softbodies.back().m_mass = m_mass;
+    m_softbodies.back().m_kd = m_kd;
+    m_softbodies.back().m_ks = m_ks;
+    m_softbodies.back().m_pressure = m_pressure;
+}
 
-/**  ========================================== End of My Functions ==========================================*/
+void Application::createBBox() {
+    mesh_builder mb(GL_LINES);
+
+    mb.push_vertex(mesh_vertex({vec3(bbox.x, bbox.y, bbox.z),
+                                normalize(vec3(bbox.x, bbox.y, bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-bbox.x, bbox.y, bbox.z),
+                                normalize(vec3(-bbox.x, bbox.y, bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(bbox.x, -bbox.y, bbox.z),
+                                normalize(vec3(bbox.x, -bbox.y, bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-bbox.x, -bbox.y, bbox.z),
+                                normalize(vec3(-bbox.x, -bbox.y, bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(bbox.x, bbox.y, -bbox.z),
+                                normalize(vec3(bbox.x, bbox.y, -bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-bbox.x, bbox.y, -bbox.z),
+                                normalize(vec3(-bbox.x, bbox.y, -bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(bbox.x, -bbox.y, -bbox.z),
+                                normalize(vec3(bbox.x, -bbox.y, -bbox.z)),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-bbox.x, -bbox.y, -bbox.z),
+                                normalize(vec3(-bbox.x, -bbox.y, -bbox.z)),
+                                vec2(0)}));
+
+    mb.push_indices({0, 1,
+                     0, 2,
+                     1, 3,
+                     2, 3,
+                     4, 5,
+                     4, 6,
+                     5, 7,
+                     6, 7,
+                     0, 4,
+                     1, 5,
+                     2, 6,
+                     3, 7});
+
+
+    m_bbox_mesh = mb.build();
+}
+
+void Application::createGroundplane() {
+
+    mesh_builder mb;
+    mb.push_vertex(mesh_vertex({vec3(200, 0, 200),
+                                vec3(0, 1, 0),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-200, 0, 200),
+                                vec3(0, 1, 0),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(-200, 0, -200),
+                                vec3(0, 1, 0),
+                                vec2(0)}));
+
+    mb.push_vertex(mesh_vertex({vec3(200, 0, -200),
+                                vec3(0, 1, 0),
+                                vec2(0)}));
+    mb.push_indices({0, 2, 1,
+                     0, 3, 2});
+
+    m_ground_plane_mesh = mb.build();
+}
+
+
+
+/**  ========================================== End of Robert Functions ==========================================*/
 
 void Application::renderGUI() {
 	if (ImGui::BeginMainMenuBar()) {
@@ -314,26 +422,26 @@ void Application::showShaderOptions() {
 void Application::showSoftBodyOptions() {
 	// setup window
 	ImGui::SetNextWindowPos(ImVec2(5, 350), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 189), ImGuiSetCond_Once);
 	ImGui::Begin("Simulation Options", 0);
 
 	ImGui::PushItemWidth(-120);
-    if (ImGui::SliderFloat("Gravity", &m_gravity, 0, 3)){
+    if (ImGui::SliderFloat("Gravity", &m_gravity, 0, 2)){
         for (auto &softbody : m_softbodies) {
             softbody.m_gravity = m_gravity;
         }
     }
-    if (ImGui::SliderFloat("Mass", &m_mass, 0.5, 1.5)){
+    if (ImGui::SliderFloat("Mass", &m_mass, 0.8, 1.5)){
         for (auto &softbody : m_softbodies) {
             softbody.m_mass = m_mass;
         }
     }
-    if (ImGui::SliderFloat("Damping factor", &m_kd, 0, 10)){
+    if (ImGui::SliderFloat("Damping factor", &m_kd, 0, 6)){
         for (auto &softbody : m_softbodies) {
             softbody.m_kd = m_kd;
         }
     }
-    if (ImGui::SliderFloat("Spring factor", &m_ks, 0, 10)){
+    if (ImGui::SliderFloat("Spring factor", &m_ks, 0, 7)){
         for (auto &softbody : m_softbodies) {
             softbody.m_ks = m_ks;
         }
@@ -343,17 +451,12 @@ void Application::showSoftBodyOptions() {
             softbody.m_pressure = m_pressure;
         }
     }
-
     ImGui::Checkbox("Place Soft Bodies", &m_place_softbodies);
 
 	if (ImGui::Button("Restart Simulation")) {
-        for (auto &softbody : m_softbodies) {
+        for (auto &softbody : m_softbodies)
             softbody.resetSimulation();
-        }
 	}
-
-
-
 
 	// finish creating window
 	ImGui::End();
@@ -365,7 +468,41 @@ void Application::showModeChanger() {
 	ImGui::Begin("Modes", 0);
 
 	ImGui::PushItemWidth(-60);
-	ImGui::Combo("Mode", &m_current_mode, m_mode_options, 3);
+	if (ImGui::Combo("Mode", &m_current_mode, m_mode_options, 3)){
+        for (auto &softbody : m_softbodies)
+            softbody.resetSimulation();
+	    if (m_current_mode == Simulation){
+             m_gravity = 1;
+             m_mass = 1.0;
+             m_kd = 6;
+             m_ks = 6;
+             m_pressure = 100;
+
+             // clear all somebodies
+             m_softbodies.erase(m_softbodies.begin(), m_softbodies.end());
+
+             m_softbodies.emplace_back();
+             mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
+             m_softbodies.at(0).initializeMesh(m_mesh, initialPositionTransform);
+
+	    } else if (m_current_mode == FullDemo) {
+
+            m_gravity = 0.025;
+            m_mass = 1.0;
+            m_kd = 6;
+            m_ks = 6;
+            m_pressure = 100;
+
+            vec3 min = vec3(-bbox.x * 0.75, -bbox.y * 0.75, -bbox.z * 0.75);
+            vec3 max = vec3(bbox.x * 0.75, bbox.y * 0.75, bbox.z * 0.75);
+
+            for (int i = 0; i < 11; ++i) {
+                vec3 pos = glm::linearRand(min, max);
+                mat4 initialPositionTransform = translate(mat4(1.0f), pos) * scale(mat4(1.0f), vec3(m_ball_radius));
+                addNewSoftbody(initialPositionTransform);
+            }
+	    }
+	}
 
 	ImGui::End();
 }
@@ -432,29 +569,20 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 
 			vec3 cameraPos = unProject(mousePos, view, proj, viewport);
 
-			vec3 rayDestination = cameraPos + direction * 30.0f;
+			vec3 rayDestination = cameraPos + direction * glm::max((m_distance - bbox.x/2), 20.0f);
 
 			if (m_place_softbodies){
-                m_softbodies.emplace_back();
                 mat4 initialPositionTransform = translate(mat4(1.0f), rayDestination) * scale(mat4(1.0f), vec3(m_ball_radius));
-                m_softbodies.back().initializeMesh(m_mesh, initialPositionTransform);
-                if (m_softbodies.size() > 5){
-                    m_softbodies.erase(m_softbodies.begin());
-                }
-			} else {
+                addNewSoftbody(initialPositionTransform);
+            } else {
                 for (auto &softbody : m_softbodies) {
                     softbody.applyClick(cameraPos, rayDestination, direction, m_ball_radius);
                 }
 			}
-
-
-
 		}
 	}
 
 }
-
-
 
 
 void Application::scrollCallback(double xoffset, double yoffset) {
@@ -514,3 +642,4 @@ void Application::setUpCubeMap(char* name) {
 	};
 	m_model.cubeMap = loadCubemap(faces);
 }
+

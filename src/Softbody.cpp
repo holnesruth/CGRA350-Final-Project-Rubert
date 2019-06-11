@@ -35,7 +35,7 @@ void Softbody::applyClick(glm::vec3 cameraPos, glm::vec3 rayDestination, glm::ve
     
     for (auto& point : m_points) {
         float dist = computeDistance(point.pos, cameraPos, rayDestination);
-        float vel =  1 - myMap(dist, 0, ball_radius / 2, 0, 1);
+        float vel =  1.3 - myMap(dist, 0, ball_radius / 1.5, 0, 1.3);
         point.vel += direction * vel;
     }
 }
@@ -113,7 +113,7 @@ void Softbody::AccumulateForces() {
 
 }
 
-void Softbody::IntegrateForces(bool useGroundPlane) {
+void Softbody::IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softbodies, float ball_radius) {
     // integrate forces
     for (auto& pnt : m_points) {
         pnt.vel += (pnt.force / m_mass) * DT;
@@ -124,10 +124,55 @@ void Softbody::IntegrateForces(bool useGroundPlane) {
             if (pnt.pos.y <= 0) {
                 pnt.pos.y = 0;
                 pnt.vel.y *= -0.5;
+                pnt.vel.x *= 0.99;
+                pnt.vel.z *= 0.99;
             }
         }
-        pnt.vel *= 0.99;
+        if (abs(pnt.pos.x) > bbox.x){
+            pnt.pos.x = pnt.pos.x / abs(pnt.pos.x) * bbox.x;
+            pnt.vel.x *= -0.9;
+        } else if (abs(pnt.pos.z) > bbox.z){
+            pnt.pos.z = pnt.pos.z / abs(pnt.pos.z) * bbox.z;
+            pnt.vel.z *= -0.9;
+        }
+
+
+        // drag force
+        pnt.vel *= 0.995;
+
+        // collision detection and handling
+        for (auto &otherSoftbody : softbodies) {
+            if (&otherSoftbody != this){
+                vec3 otherCentroid = otherSoftbody.m_centroid;
+                float dist = distance(pnt.pos, otherCentroid);
+                if (dist < ball_radius) {
+                    float amountToMove = abs(dist - ball_radius);
+                    vec3 directionToMove = normalize(pnt.pos - otherCentroid);
+                    pnt.pos += directionToMove * amountToMove;
+                    pnt.vel = directionToMove * length(pnt.vel) * 0.8f;
+
+                }
+            }
+        }
     }
+
+    // if using bbox
+    if (!useGroundPlane) {
+        if (abs(m_centroid.y) > bbox.y){
+            float delta = normalize(m_centroid.y) * bbox.y * -2;
+            for (auto &pnt : m_points){
+                pnt.pos.y += delta;
+            }
+        }
+    }
+}
+
+void Softbody::updateCentroid(){
+    vec3 total = vec3(0);
+    for (auto &point : m_points) {
+        total+=point.pos;
+    }
+    m_centroid = total / (float) m_points.size();
 }
 
 void Softbody::initializeMesh(mesh_builder mesh, mat4 initialTransform) {
@@ -173,6 +218,7 @@ void Softbody::initializeMesh(mesh_builder mesh, mat4 initialTransform) {
     m_mesh = mesh;
 }
 
+
 cgra::gl_mesh Softbody::constructMesh(bool showWireframe) {
 
     if (showWireframe) {
@@ -205,13 +251,7 @@ cgra::gl_mesh Softbody::constructMesh(bool showWireframe) {
 
 
 void Softbody::resetSimulation() {
-//    vec3 min = vec3(-0.05, 0.1, -0.05);
-//    vec3 max = vec3(0.05, 0.4, 0.05);
-
     for (int i = 0; i < m_points.size(); i++) {
-        //        p.vel = glm::linearRand(min, max);
         m_points.at(i) = m_restPos.at(i);
     }
-
-
 }

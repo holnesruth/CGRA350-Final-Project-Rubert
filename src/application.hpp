@@ -61,9 +61,15 @@ private:
 	// timer
 	double m_lastMillis;
 
+	// soft bodies
 	std::vector<Softbody> m_softbodies;
 
-	// soft body geometry
+	// utility meshes
+    cgra::gl_mesh m_bbox_mesh;
+    cgra::gl_mesh m_ground_plane_mesh;
+
+
+    // soft body geometry
 	float m_ball_radius = 4;
 	cgra::mesh_builder m_mesh;
 
@@ -126,10 +132,15 @@ public:
 	/** =========================== Robert Functions ===================== */
 
     static void cleanMesh(cgra::mesh_builder &mesh);
+    void addNewSoftbody(glm::mat4 initialTransform);
+    void createBBox();
 
     /** =========================== Ruth Functions ===================== */
     // Cube mapping
     unsigned int loadCubemap(std::vector<std::string> cubeFaces);
     void setUpCubeMap(char* name);
 
+    void createGroundplane();
+
+    void drawModel(glm::mat4 &view, glm::mat4 &proj);
 };

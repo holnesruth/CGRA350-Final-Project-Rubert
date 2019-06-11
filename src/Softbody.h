@@ -35,11 +35,15 @@ struct Spring {
 
 
 // simulation constants
-static const float DT = 0.01666666667; // time difference
+static const float DT = 0.008333333333; // time difference
 static const float KS = 1755.0f; // spring constant
+
+static const glm::vec3 bbox = glm::vec3(40, 40, 40);
 
 class Softbody {
 public:
+
+    glm::vec3 m_centroid;
 
     // simulation params
     float m_gravity = 1;
@@ -60,7 +64,7 @@ public:
 
     void AccumulateForces();
 
-    void IntegrateForces(bool useGroundPlane);
+    void IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softbodies, float ball_radius);
 
     void initializeMesh(cgra::mesh_builder mesh, glm::mat4 initialTransform);
 
@@ -71,6 +75,8 @@ public:
     static double computeDistance(glm::vec3 A, glm::vec3 B, glm::vec3 C);
 
     static float myMap(float value, float start1, float stop1, float start2, float stop2);
+
+    void updateCentroid();
 };
 
 
