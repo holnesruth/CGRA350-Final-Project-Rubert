@@ -9,6 +9,7 @@
 #include "opengl.hpp"
 #include "cgra/cgra_mesh.hpp"
 #include "skeleton_model.hpp"
+#include "Softbody.h"
 
 
 // Basic model that holds the shader, mesh and transform for drawing.
@@ -28,29 +29,6 @@ struct basic_model {
     void updateParams(float minThickness, float maxThickness, float intensity, float transparency);
 };
 
-// Soft body points
-struct Point {
-    glm::vec3 pos, vel, force;
-    float mass;
-    glm::vec3 norm;
-};
-
-// Soft body springs
-struct Spring {
-    int index1, index2; // indices for the two points on either end of m_spring
-    float length; // rest length
-    glm::vec3 normal; // normal vector
-
-    inline bool operator==(const Spring& other)
-    {
-        return index1 == other.index1 && index2 == other.index2;
-    }
-};
-
-
-// simulation constants
-static const float DT = 0.01666666667; // time difference
-static const float KS = 1755.0f; // spring constant
 
 // Main application class
 //
@@ -83,12 +61,11 @@ private:
 	// timer
 	double m_lastMillis;
 
+	std::vector<Softbody> m_softbodies;
+
 	// soft body geometry
 	float m_ball_radius = 4;
 	cgra::mesh_builder m_mesh;
-	std::vector<Point> m_points;
-    std::vector<Spring> m_springs;
-    std::vector<Point> m_restPos;
 
     // simulation parameters
     float m_gravity = 1;
@@ -96,6 +73,9 @@ private:
     float m_kd = 6;
     float m_ks = 6;
     float m_pressure = 100;
+
+    // mouse mode
+    bool m_place_softbodies = false;
 
     /** =========================== Ruth Parameters ===================== */
     // Bubbles
@@ -144,18 +124,12 @@ public:
 	void charCallback(unsigned int c);
 
 	/** =========================== Robert Functions ===================== */
-    cgra::gl_mesh constructMesh(std::vector<Point> &points, std::vector<Spring> &springs);
 
-    void resetSimulation();
-
-    void AccumulateForces();
-
-    void IntegrateForces();
-
-    void initializeMesh();
+    static void cleanMesh(cgra::mesh_builder &mesh);
 
     /** =========================== Ruth Functions ===================== */
     // Cube mapping
     unsigned int loadCubemap(std::vector<std::string> cubeFaces);
     void setUpCubeMap(char* name);
+
 };

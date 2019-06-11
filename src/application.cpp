@@ -68,10 +68,21 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
 
-	initializeMesh();
+
+    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_270.obj"));
+    cleanMesh(m_mesh);
+
+    m_softbodies.emplace_back();
+
+    mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
+    m_softbodies.at(0).initializeMesh(m_mesh, initialPositionTransform);
 
 	m_model.shader = m_shader_default;
-	m_model.mesh = constructMesh(m_points, m_springs);
+
+	for( auto &softbody : m_softbodies){
+	    m_model.mesh = softbody.constructMesh(m_showWireframe);
+	}
+
 	m_model.color = vec3(1, 1, 1);
 
 	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
@@ -118,31 +129,6 @@ void Application::render() {
 
 	m_model.updateParams(m_min, m_max, m_intensity, m_opacity);
 
-	double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-
-	if (m_current_mode != Shader){
-        // if it's time for another simulation step
-        if (millis - m_lastMillis > DT * 1000) {
-            AccumulateForces();
-
-            IntegrateForces();
-
-            m_model.mesh = constructMesh(m_points, m_springs);
-
-            m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-
-        }
-
-        // draw spheres on all points
-        if (m_showWireframe) {
-            for (auto &point : m_points) {
-                //Point point = m_points.at(0);
-                m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
-                m_model.draw(view, proj, true);
-            }
-        }
-
-	}
 
     if (m_current_mode == Simulation) {
         m_model.shader = m_shader_default;
@@ -151,259 +137,101 @@ void Application::render() {
         m_model.shader = m_shader_bubble;
     }
 
-	// draw the mesh
-	if (m_current_mode == Shader) {
-		m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius)); 
-		m_show_grid = false;
-	} else {
-		m_model.modelTransform = mat4(1.0);
-	}
 
 	if (m_show_grid) drawGrid(view, proj);
 	if (m_show_axis) drawAxis(view, proj);
 
-	// draw the model
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
+    double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
-	m_model.leParams.y *= m_intensity;
-	m_model.draw(view, proj, (m_current_mode == Shader));
+    if (millis - m_lastMillis > DT * 1000) {
+        for (auto &softbody : m_softbodies) {
+            softbody.AccumulateForces();
+            softbody.IntegrateForces(m_current_mode != FullDemo);
+        }
+        m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
+                chrono::system_clock::now().time_since_epoch()).count();
+    }
 
-	glCullFace(GL_BACK);
 
-	m_model.leParams.y = m_opacity;
-	m_model.draw(view, proj, (m_current_mode == Shader));
+
+    for (auto &softbody : m_softbodies) {
+        if (m_current_mode != Shader) {
+            // if it's time for another simulation step
+
+
+
+
+                m_model.mesh = softbody.constructMesh(m_showWireframe);
+
+
+            // draw spheres on all points
+            if (m_showWireframe) {
+                for (auto &point : softbody.m_points) {
+                    m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
+                    m_model.draw(view, proj, true);
+                }
+            }
+        }
+
+        // draw the mesh
+        if (m_current_mode == Shader) {
+            m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius));
+            m_show_grid = false;
+        } else {
+            m_model.modelTransform = mat4(1.0);
+        }
+
+        // draw the model
+        glEnable(GL_CULL_FACE);
+        glCullFace(GL_FRONT);
+
+        m_model.leParams.y *= m_intensity;
+        m_model.draw(view, proj, (m_current_mode == Shader));
+
+        glCullFace(GL_BACK);
+
+        m_model.leParams.y = m_opacity;
+        m_model.draw(view, proj, (m_current_mode == Shader));
+    }
+
 }
 
 
 /**  ========================================== My Functions ==========================================*/
 
+void Application::cleanMesh(mesh_builder &mesh){
+    /** ============== Clean up the mesh data ============== */
+    // for every vert in the mesh
+    for (int i = mesh.vertices.size() - 1; i >= 0; i--) {
+        vec3 vertPos = mesh.vertices.at(i).pos;
 
-void Application::AccumulateForces() {
+        // go through the rest of the vertices
+        for (int j = i - 1; j >= 0; --j) {
+            // if a duplicate is found
+            if (vertPos == mesh.vertices.at(j).pos) {
+                // delete the duplicate
+                mesh.vertices.erase(next(begin(mesh.vertices), i));
 
-	/** ============== Accumulate gravity force ============================ */
-	for (auto& m_point : m_points) {
-		m_point.force = vec3(0, -m_gravity * m_mass, 0);
-	}
-
-	/** ============== Accumulate spring force ============================ */
-	for (auto& spring : m_springs) {
-		Point& p1 = m_points.at(spring.index1);
-		Point& p2 = m_points.at(spring.index2);
-
-		float x1 = p1.pos.x;	float y1 = p1.pos.y; float z1 = p1.pos.z;
-		float x2 = p2.pos.x;	float y2 = p2.pos.y; float z2 = p2.pos.z;
-
-		float r12d = sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2) + (z1 - z2) * (z1 - z2));
-
-		if (r12d == 0) continue;
-
-		float vx12 = p1.vel.x - p2.vel.x;
-		float vy12 = p1.vel.y - p2.vel.y;
-		float vz12 = p1.vel.z - p2.vel.z;
-
-		float f = (r12d - spring.length) * m_ks + (vx12 * (x1 - x2) + vy12 * (y1 - y2) + vz12 * (z1 - z2)) * m_kd / r12d;
-
-
-		float Fx = ((x1 - x2) / r12d) * f;
-		float Fy = ((y1 - y2) / r12d) * f;
-		float Fz = ((z1 - z2) / r12d) * f;
-
-		p1.force -= vec3(Fx, Fy, Fz);
-		p2.force += vec3(Fx, Fy, Fz);
-
-	}
-
-	/** ============== Calculate Volume ============================ */
-//    Robust method for calculating volume from Frank Krueger at https://stackoverflow.com/a/1568551
-	double volume = 0;
-	// for each triangle
-	for (int i = 0; i < m_springs.size(); i += 3) {
-		vec3 p1 = m_points.at(m_springs.at(i).index1).pos;
-		vec3 p2 = m_points.at(m_springs.at(i + 1).index1).pos;
-		vec3 p3 = m_points.at(m_springs.at(i + 2).index1).pos;
-
-		volume += dot(p1, cross(p2, p3)) / 6.0f;
-
-	}
-
-
-	/** ============== Accumulate pressure force ============================ */
-	for (int i = 0; i < m_springs.size(); i += 3) {
-		Point p1 = m_points.at(m_springs.at(i).index1);
-		Point p2 = m_points.at(m_springs.at(i + 1).index1);
-		Point p3 = m_points.at(m_springs.at(i + 2).index1);
-
-		vec3 p1_p2 = p2.pos - p1.pos;
-		vec3 p1_p3 = p3.pos - p1.pos;
-
-		float faceSize = length(cross(p1_p2, p1_p3)) / 2;
-
-		float pressureValue = faceSize * m_pressure * (1.0f / volume);
-
-		for (int j = 0; j < 3; ++j) {
-			Spring s = m_springs.at(i + j);
-			m_points.at(s.index1).force += pressureValue * s.normal;
-			m_points.at(s.index2).force += pressureValue * s.normal;
-		}
-	}
-
-
-
-}
-
-void Application::IntegrateForces() {
-	// integrate forces
-	for (auto& pnt : m_points) {
-		pnt.vel += (pnt.force / m_mass) * DT;
-		//        float lastY = pnt.pos.y;
-		pnt.pos += pnt.vel;
-
-		if (m_current_mode != FullDemo) {
-            if (pnt.pos.y <= 0) {
-                pnt.pos.y = 0;
-                pnt.vel.y *= -0.5;
+                // go through the list of verticies
+                for (int z = i; z < mesh.indices.size(); z++) {
+                    // if they were pointing at the deleted index
+                    if (mesh.indices.at(z) == i) {
+                        // change them to point at the found duplicate index
+                        mesh.indices.at(z) = j;
+                        // if they were pointing at a vertex after the deleted index
+                    }
+                    else if (mesh.indices.at(z) > i) {
+                        // subtract one to make sure they still point at the same vertex as before
+                        // (because we deleted one and the indices all shift over by one)
+                        mesh.indices.at(z) = mesh.indices.at(z) - 1;
+                    }
+                }
+                break;
             }
-		}
-		pnt.vel *= 0.99;
-	}
+        }
+    }
 }
 
-void Application::initializeMesh() {
-	mesh_builder mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_270.obj"));
-
-	/** ============== Clean up the mesh data ============== */
-	// for every vert in the mesh
-	for (int i = mesh.vertices.size() - 1; i >= 0; i--) {
-		vec3 vertPos = mesh.vertices.at(i).pos;
-
-		// go through the rest of the vertices
-		for (int j = i - 1; j >= 0; --j) {
-			// if a duplicate is found
-			if (vertPos == mesh.vertices.at(j).pos) {
-				// delete the duplicate
-				mesh.vertices.erase(next(begin(mesh.vertices), i));
-
-				// go through the list of verticies
-				for (int z = i; z < mesh.indices.size(); z++) {
-					// if they were pointing at the deleted index
-					if (mesh.indices.at(z) == i) {
-						// change them to point at the found duplicate index
-						mesh.indices.at(z) = j;
-						// if they were pointing at a vertex after the deleted index
-					}
-					else if (mesh.indices.at(z) > i) {
-						// subtract one to make sure they still point at the same vertex as before
-						// (because we deleted one and the indices all shift over by one)
-						mesh.indices.at(z) = mesh.indices.at(z) - 1;
-					}
-				}
-				break;
-			}
-		}
-	}
-
-	/** ============== Construct points and springs from clean mesh data ============== */
-
-	mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
-
-	for (auto& meshVertex : mesh.vertices) {
-		vec4 initialPos = vec4(meshVertex.pos.x, meshVertex.pos.y, meshVertex.pos.z, 1);
-		vec4 newPos = initialPositionTransform * initialPos;
-		m_points.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f, meshVertex.norm}));
-		m_restPos.push_back(Point({ vec3(newPos), vec3(0.0f), vec3(0.0f), 0.0f, meshVertex.norm}));
-	}
-
-	for (int i = 0; i < mesh.indices.size(); i += 3) {
-		int index1 = mesh.indices.at(i);
-		int index2 = mesh.indices.at(i + 1);
-		int index3 = mesh.indices.at(i + 2);
-
-		mesh_vertex p1 = mesh.vertices.at(index1);
-		mesh_vertex p2 = mesh.vertices.at(index2);
-		mesh_vertex p3 = mesh.vertices.at(index3);
-
-		vec3 pos1 = m_points.at(index1).pos;
-		vec3 pos2 = m_points.at(index2).pos;
-		vec3 pos3 = m_points.at(index3).pos;
-
-
-		m_springs.push_back(Spring({ index1, index2, distance(pos1, pos2), (p1.norm + p2.norm) / 2.0f }));
-		m_springs.push_back(Spring({ index2, index3, distance(pos2, pos3), (p2.norm + p3.norm) / 2.0f }));
-		m_springs.push_back(Spring({ index3, index1, distance(pos3, pos1), (p3.norm + p1.norm) / 2.0f }));
-	}
-
-
-	// erase all spring duplicates
-	vector<Spring>::iterator end = m_springs.end();
-	for (vector<Spring>::iterator it = m_springs.begin(); it != end; ++it) {
-		end = std::remove(it + 1, end, *it);
-	}
-
-	m_springs.erase(end, m_springs.end());
-
-	m_mesh = mesh;
-}
-
-cgra::gl_mesh Application::constructMesh(std::vector<Point>& points, std::vector<Spring>& springs) {
-	// TODO
-	if (m_showWireframe) {
-		mesh_builder mb(GL_LINES);
-		vec3 normal = vec3(0, 0, 1);
-		for (auto& point : points) {
-			mb.push_vertex(mesh_vertex{
-					point.pos,
-					normal,
-					vec2(0, 0)
-				});
-		}
-
-		for (auto& spring : springs) {
-			mb.push_index(spring.index1);
-			mb.push_index(spring.index2);
-		}
-
-		return mb.build();
-	}
-	else {
-		for (int i = 0; i < m_points.size(); i++) {
-			m_mesh.vertices.at(i).pos = m_points.at(i).pos;
-		}
-		return m_mesh.build();
-	}
-
-
-}
-
-
-void Application::resetSimulation() {
-//    vec3 min = vec3(-0.05, 0.1, -0.05);
-//    vec3 max = vec3(0.05, 0.4, 0.05);
-
-	for (int i = 0; i < m_points.size(); i++) {
-		//        p.vel = glm::linearRand(min, max);
-		m_points.at(i) = m_restPos.at(i);
-	}
-
-
-}
-
-double computeDistance(vec3 A, vec3 B, vec3 C) {
-	vec3 d = (C - B) / distance(C, B);
-	vec3 v = A - B;
-	float t = dot(v, d);
-	vec3 P = B + (t * d);
-	return distance(A, P);
-}
-
-
-float myMap(float value,float start1, float stop1, float start2, float stop2){
-    float val = start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
-    if (val > stop2)
-        return stop2;
-    else
-        return val;
-}
 
 /**  ========================================== End of My Functions ==========================================*/
 
@@ -490,15 +318,42 @@ void Application::showSoftBodyOptions() {
 	ImGui::Begin("Simulation Options", 0);
 
 	ImGui::PushItemWidth(-120);
-	ImGui::SliderFloat("Gravity", &m_gravity, 0, 3);
-	ImGui::SliderFloat("Mass", &m_mass, 0.5, 1.5);
-	ImGui::SliderFloat("Damping factor", &m_kd, 0, 10);
-	ImGui::SliderFloat("Spring factor", &m_ks, 0, 10);
-	ImGui::SliderFloat("Pressure factor", &m_pressure, 0, 200);
+    if (ImGui::SliderFloat("Gravity", &m_gravity, 0, 3)){
+        for (auto &softbody : m_softbodies) {
+            softbody.m_gravity = m_gravity;
+        }
+    }
+    if (ImGui::SliderFloat("Mass", &m_mass, 0.5, 1.5)){
+        for (auto &softbody : m_softbodies) {
+            softbody.m_mass = m_mass;
+        }
+    }
+    if (ImGui::SliderFloat("Damping factor", &m_kd, 0, 10)){
+        for (auto &softbody : m_softbodies) {
+            softbody.m_kd = m_kd;
+        }
+    }
+    if (ImGui::SliderFloat("Spring factor", &m_ks, 0, 10)){
+        for (auto &softbody : m_softbodies) {
+            softbody.m_ks = m_ks;
+        }
+    }
+	if (ImGui::SliderFloat("Pressure factor", &m_pressure, 0, 200)){
+        for (auto &softbody : m_softbodies) {
+            softbody.m_pressure = m_pressure;
+        }
+    }
+
+    ImGui::Checkbox("Place Soft Bodies", &m_place_softbodies);
 
 	if (ImGui::Button("Restart Simulation")) {
-		resetSimulation();
+        for (auto &softbody : m_softbodies) {
+            softbody.resetSimulation();
+        }
 	}
+
+
+
 
 	// finish creating window
 	ImGui::End();
@@ -549,7 +404,8 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			lastDown = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 		}
 		if (action == GLFW_RELEASE && chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count() - lastDown < 100) {
-
+            // if not in simulation/final mode, skip this
+		    if (m_current_mode == Shader) return;
 
 			// https://stackoverflow.com/a/30005258
 			/** ================================================================================================ */
@@ -576,14 +432,22 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 
 			vec3 cameraPos = unProject(mousePos, view, proj, viewport);
 
-			vec3 C = cameraPos + direction * 30.0f;
+			vec3 rayDestination = cameraPos + direction * 30.0f;
 
-
-			for (auto& point : m_points) {
-			    float dist = computeDistance(point.pos, cameraPos, C);
-                float vel =  1 - myMap(dist, 0, m_ball_radius / 2, 0, 1);
-			    point.vel += direction * vel;
+			if (m_place_softbodies){
+                m_softbodies.emplace_back();
+                mat4 initialPositionTransform = translate(mat4(1.0f), rayDestination) * scale(mat4(1.0f), vec3(m_ball_radius));
+                m_softbodies.back().initializeMesh(m_mesh, initialPositionTransform);
+                if (m_softbodies.size() > 5){
+                    m_softbodies.erase(m_softbodies.begin());
+                }
+			} else {
+                for (auto &softbody : m_softbodies) {
+                    softbody.applyClick(cameraPos, rayDestination, direction, m_ball_radius);
+                }
 			}
+
+
 
 		}
 	}
