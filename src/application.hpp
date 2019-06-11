@@ -21,9 +21,12 @@ struct basic_model {
     glm::vec3 color{0.7};
     glm::mat4 modelTransform{1.0};
     GLuint gradient;
+	GLuint noise;
     GLuint cubeMap;
     glm::vec2 tParams;
     glm::vec2 leParams;
+	float time = 100.0;
+	bool flow = false;
 
     void draw(const glm::mat4 &view, const glm::mat4 proj, bool drawAsSphere);
     void updateParams(float minThickness, float maxThickness, float intensity, float transparency);
@@ -51,7 +54,7 @@ private:
 
     // drawing flags
 	bool m_show_axis = false;
-	bool m_show_grid = true;
+	bool m_show_grid = false;
 	bool m_showWireframe = false;
 
 	// geometry
@@ -90,6 +93,7 @@ private:
     int m_max = 700;
     float m_intensity = 0.5;
     float m_opacity = 0.2;
+	float m_speed = 2.0;
 
     char* m_map_options[10] = { "Colosseum", "Creek", "LancellottiChapel",
                                 "Lycksele", "MountainPath", "NissiBeach",
@@ -104,7 +108,7 @@ private:
 
 	enum m_mode { Shader, Simulation, FullDemo };
 	char* m_mode_options[3] = { "Shader", "Simulation", "Full Demo" };
-	int m_current_mode = Simulation;
+	int m_current_mode = 0;
 
 public:
 	// setup
@@ -133,15 +137,19 @@ public:
 	/** =========================== Robert Functions ===================== */
 
     static void cleanMesh(cgra::mesh_builder &mesh);
+
     void addNewSoftbody(glm::mat4 initialTransform, bool printVerts);
+
     void createBBox();
+
+    void createGroundplane();
+
+    void drawModel(glm::mat4 &view, glm::mat4 &proj);
 
     /** =========================== Ruth Functions ===================== */
     // Cube mapping
     unsigned int loadCubemap(std::vector<std::string> cubeFaces);
     void setUpCubeMap(char* name);
 
-    void createGroundplane();
 
-    void drawModel(glm::mat4 &view, glm::mat4 &proj);
 };

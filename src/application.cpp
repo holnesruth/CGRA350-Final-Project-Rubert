@@ -27,29 +27,44 @@ using namespace glm;
 void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsSphere) {
 	mat4 modelview = view * modelTransform;
 
-	glUseProgram(shader); // load shader and variables
+	// load shader and variables
+	glUseProgram(shader);
+
+	// matrices
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uProjectionMatrix"), 1, false, value_ptr(proj));
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelViewMatrix"), 1, false, value_ptr(modelview));
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelMatrix"), 1, false, value_ptr(modelTransform));
+
+	// colour
 	glUniform3fv(glGetUniformLocation(shader, "uColor"), 1, value_ptr(color));
 	glUniform2fv(glGetUniformLocation(shader, "uThickness"), 1, value_ptr(tParams));
 	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(leParams));
+
+	// flow noise
+	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
+	glUniform2fv(glGetUniformLocation(shader, "uResolution"), 1, value_ptr(vec2(8.0, 8.0)));
+	glUniform1i(glGetUniformLocation(shader, "uFlow"), flow);
+
+	// textures
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gradient);
 	glUniform1i(glGetUniformLocation(shader, "uTexture"), 0);
 	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, noise);
+	glUniform1i(glGetUniformLocation(shader, "uNoise"), 1);
+	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMap);
-	glUniform1i(glGetUniformLocation(shader, "uCubeMap"), 1);
+	glUniform1i(glGetUniformLocation(shader, "uCubeMap"), 2);
 
-
+	// decide which mesh to draw
 	if (!drawAsSphere) {
-		mesh.draw(); // draw
+		mesh.draw(); // draw the soft body mesh
 	} else {
-		drawSphere();
+		drawSphere(); // draw a standard sphere
 	}
 }
 
-
+// Update the models's parameters for shading
 void basic_model::updateParams(float minThickness, float maxThickness, float intensity, float opacity) {
 	tParams.x = minThickness;
 	tParams.y = maxThickness;
@@ -57,13 +72,18 @@ void basic_model::updateParams(float minThickness, float maxThickness, float int
 	leParams.y = opacity;
 }
 
-
+// Load the application
 Application::Application(GLFWwindow* window) : m_window(window) {
 
+	// Create the shaders
 	shader_builder sb;
+
+	// Bubble shader
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//simple_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//bubbles.glsl"));
 	m_shader_bubble = sb.build();
+
+	// Colour shader for simulation
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
@@ -94,6 +114,11 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	rgba_image img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//grad.jpg"));
 	m_model.gradient = img.uploadTexture();
 
+	// Set up the noise texture
+	img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//noise.png"));
+	m_model.noise = img.uploadTexture();
+
+	// Create the reflections with a cube map
 	setUpCubeMap("Skansen");
 }
 
@@ -115,6 +140,7 @@ void Application::render() {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
+	// Enable tgransparency
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -126,10 +152,10 @@ void Application::render() {
 		* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
 		* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
 
-
 	// helpful draw options
 	glPolygonMode(GL_FRONT_AND_BACK, (m_showWireframe) ? GL_LINE : GL_FILL);
 
+	// update model parameters for shading
 	m_model.updateParams(m_min, m_max, m_intensity, m_opacity);
 
 
@@ -146,17 +172,34 @@ void Application::render() {
 
     double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
+
+
     // if in shader mode, dont bother with soft bodies
     if (m_current_mode == Shader) {
         m_model.mesh = m_hiRez_ball;
-        m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius));
+        m_model.modelTransform = scale(rotate(mat4(1.0f), radians(90.0f), vec3(1, 0, 0)), vec3(m_ball_radius));
         m_show_grid = false;
         drawModel(view, proj);
+
+        // update flow noise parameter
+        if (millis - m_lastMillis > DT * 1000) {
+            m_model.time += m_speed / 100;
+            if (m_model.time > 150) {
+                m_model.time = 100; // reset
+            }
+            m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
+                    chrono::system_clock::now().time_since_epoch()).count();
+        }
         return;
     }
 
     /** ============ Simulation Step ====================== */
     if (millis - m_lastMillis > DT * 1000) {
+
+        m_model.time += m_speed / 100;
+        if (m_model.time > 150) {
+            m_model.time = 100; // reset
+        }
 
         for (auto &softbody : m_softbodies)
             softbody.updateCentroid();
@@ -167,6 +210,7 @@ void Application::render() {
         }
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                 chrono::system_clock::now().time_since_epoch()).count();
+
     }
 
     /** ============ Draw Softbodies ====================== */
@@ -364,12 +408,12 @@ void Application::createGroundplane() {
 void Application::renderGUI() {
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("Options")) {
-			if (ImGui::MenuItem("View")) { m_view = !m_view; }
+			if (ImGui::MenuItem("Toggle View Menu")) { m_view = !m_view; }
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem("Shader")) { m_shade = !m_shade; }
-			if (ImGui::MenuItem("Simulation")) { m_sim = !m_sim; }
+			if (ImGui::MenuItem("Toggle Shader Menu")) { m_shade = !m_shade; }
+			if (ImGui::MenuItem("Toggle Simulation Menu")) { m_sim = !m_sim; }
 
 			ImGui::Separator();
 
@@ -419,14 +463,20 @@ void Application::showViewOptions() {
 void Application::showShaderOptions() {
 	// setup window
 	ImGui::SetNextWindowPos(ImVec2(5, 195), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 150), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 170), ImGuiSetCond_Once);
 	ImGui::Begin("Shader Options", 0);
 
 	ImGui::PushItemWidth(-120);
+
 	ImGui::SliderInt("Min Thickness", &m_min, 10, m_max);
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
-	ImGui::SliderFloat("Light Intensity", &m_intensity, 0, 1, "%.2f");
-	ImGui::SliderFloat("Opacity", &m_opacity, 0, 1, "%.2f");
+
+	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
+	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
+
+	ImGui::Checkbox("Flow", &m_model.flow);
+	ImGui::SameLine();
+	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 10.0f, "%.2f");
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);
@@ -439,7 +489,7 @@ void Application::showShaderOptions() {
 
 void Application::showSoftBodyOptions() {
 	// setup window
-	ImGui::SetNextWindowPos(ImVec2(5, 350), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(5, 370), ImGuiSetCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(300, 189), ImGuiSetCond_Once);
 	ImGui::Begin("Simulation Options", 0);
 
@@ -485,7 +535,7 @@ void Application::showModeChanger() {
 	ImGui::SetNextWindowSize(ImVec2(160, 50), ImGuiSetCond_Once);
 	ImGui::Begin("Modes", 0);
 
-	ImGui::PushItemWidth(-60);
+    ImGui::PushItemWidth(-120);
 	if (ImGui::Combo("Mode", &m_current_mode, m_mode_options, 3)){
         for (auto &softbody : m_softbodies)
             softbody.resetSimulation();
