@@ -33,5 +33,6 @@
 
 /*
 !res/
+!res/assets/
 !src/
 !.gitignore

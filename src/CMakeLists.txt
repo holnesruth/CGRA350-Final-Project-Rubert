@@ -14,13 +14,15 @@ SET(sources
 	"skeleton.cpp"
 	"skeleton_model.hpp"
 	"skeleton_model.cpp"
+	"Softbody.cpp"
+	"Softbody.h"
 	
 	"opengl.hpp"
 
 	"main.cpp"
 
 	"CMakeLists.txt"
-)
+        )
 
 # Add executable target and link libraries
 add_executable(${CGRA_PROJECT} ${sources})
