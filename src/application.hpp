@@ -25,6 +25,7 @@ struct basic_model {
     glm::vec2 tParams;
     glm::vec2 leParams;
 	float time = 100.0;
+	bool flow = false;
 
     void draw(const glm::mat4 &view, const glm::mat4 proj, bool drawAsSphere);
     void updateParams(float minThickness, float maxThickness, float intensity, float transparency);

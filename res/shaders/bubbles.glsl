@@ -22,6 +22,8 @@ uniform vec2 uLightEffects;
 uniform float uTime;
 uniform vec2 uResolution;
 
+uniform bool uFlow;
+
 // viewspace data (this must match the output of the vertex shader)
 in VertexData {
 	vec3 position;
@@ -35,66 +37,38 @@ out vec4 fb_color;
 const vec3 DIRECTION = vec3(1, 1, 4);
 
 /*============================ FLOW NOISE IMPLEMENTATION ============================*/
-// With help from https://www.shadertoy.com/view/lslXRS
 
 float time = uTime*0.1;
-
-float hash21(vec2 n) { 
-	return fract(sin(dot(n, vec2(12.9898, 4.1414)))*43758.5453); 
-}
-
-mat2 makem2(float theta) { 
-	float c = cos(theta); 
-	float s = sin(theta); 
-	
-	return mat2(c, -s, s, c); 
-}
 
 float noise(vec2 x) { 
 	return texture(uNoise, x*0.1).x; 
 }
 
-vec2 gradient(vec2 p) {
-	float ep = .09;
-	float gradx = noise(vec2(p.x + ep, p.y)) - noise(vec2(p.x - ep, p.y));
-	float grady = noise(vec2(p.x, p.y + ep)) - noise(vec2(p.x, p.y - ep));
-	return vec2(gradx, grady);
-}
+float flow(vec2 v) {
+	float divisor = 2.0;
+	float result = 0.0;
+	vec2 base = v;
+	float octaves = 7.0;
 
-float flow(vec2 p) {
-	float z=2.;
-	float rz = 0.;
-	vec2 bp = p;
-	for (float i = 1.0; i < 7.0; i++) {
+	for (float i = 1.0; i < octaves; i++) {
 		//primary flow speed
-		p += time*0.6;
-		
-		//secondary flow speed (speed of the perceived flow)
-		bp += time*1.9;
-		
-		//displacement field (try changing time multiplier)
-		vec2 gr = gradient(i*p*0.34 + time*1.0);
-		
-		//rotation of the displacement field
-		gr *= makem2(time*6.0 - (0.05*p.x + 0.03*p.y)*40.0);
-		
-		//displace the system
-		p += gr*0.5;
+		v += time*0.6;
 		
 		//add noise octave
-		rz += (sin(noise(p)*7.0)*0.5 + 0.5)/z;
+		result += (sin(noise(v)*octaves)*0.5 + 0.5)/divisor;
 		
-		//blend factor (blending displaced system with base system)
-		//you could call this advection factor (.5 being low, .95 being high)
-		p = mix(bp, p, 0.77);
+		//blend factor - 0.5 being low, 0.95 being high
+		v = mix(base, v, 0.77);
 		
 		//intensity scaling
-		z *= 1.4;
+		divisor *= 1.4;
+
 		//octave scaling
-		p *= 2.0;
-		bp *= 1.9;
+		v *= 2.0;
+		base *= 1.9;
 	}
-	return rz;	
+
+	return result;	
 }
 
 /*============================ REFRACTION IMPLEMENTATION ============================*/
@@ -140,15 +114,20 @@ void main() {
 	vec3 viewDir = normalize(-f_in.position);
 	vec3 reflectDir = reflect(-lightDir, norm);
 
-	vec2 p = (f_in.position.xy / uResolution.xy) - 0.5;
-	p.x *= uResolution.x/uResolution.y;
-	p *= 3.0;
-	float rz = flow(p);
-
 	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb;
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
-	float w = ((minThickness*(1.0 - t)) + (maxThickness*t)); 
-	w = w/rz; //introduce noise
+	float w = ((minThickness*(1.0 - t)) + (maxThickness*t));
+	
+	vec2 v = (f_in.position.xy / uResolution.xy) - 0.5;
+	v.x *= uResolution.x/uResolution.y;
+	v *= 3.0;
+
+	//introduce noise
+	if (uFlow) {
+		w /= flow(v); 
+	} else {
+		w /= noise(f_in.textureCoord.xy);
+	}
 
 	float theta_i = max(dot(norm, lightDir), 0.0);
 

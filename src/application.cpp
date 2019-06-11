@@ -43,6 +43,7 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	// flow noise
 	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
 	glUniform2fv(glGetUniformLocation(shader, "uResolution"), 1, value_ptr(vec2(8.0, 8.0)));
+	glUniform1i(glGetUniformLocation(shader, "uFlow"), flow);
 
 	// textures
 	glActiveTexture(GL_TEXTURE0);
@@ -505,10 +506,15 @@ void Application::showShaderOptions() {
 	ImGui::Begin("Shader Options", 0);
 
 	ImGui::PushItemWidth(-120);
+
 	ImGui::SliderInt("Min Thickness", &m_min, 10, m_max);
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
+
 	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
 	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
+
+	ImGui::Checkbox("Flow", &m_model.flow);
+	ImGui::SameLine();
 	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 10.0f, "%.2f");
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
