@@ -13,10 +13,14 @@ uniform mat4 uModelViewMatrix;
 uniform mat4 uModelMatrix;
 
 uniform sampler2D uTexture;
+uniform sampler2D uNoise;
 uniform samplerCube uCubeMap;
 
 uniform vec2 uThickness;
 uniform vec2 uLightEffects;
+
+uniform float uTime;
+uniform vec2 uResolution;
 
 // viewspace data (this must match the output of the vertex shader)
 in VertexData {
@@ -29,6 +33,62 @@ in VertexData {
 out vec4 fb_color;
 
 const vec3 DIRECTION = vec3(1, 1, 4);
+
+/*============================ FLOW NOISE IMPLEMENTATION ============================*/
+
+float time = uTime*0.1;
+
+float hash21(vec2 n){ return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453); }
+mat2 makem2(float theta){ float c = cos(theta); float s = sin(theta); return mat2(c,-s,s,c); }
+float noise(vec2 x){ return texture(uNoise, x*0.1).x; }
+
+vec2 gradn(vec2 p)
+{
+	float ep = .09;
+	float gradx = noise(vec2(p.x+ep,p.y))-noise(vec2(p.x-ep,p.y));
+	float grady = noise(vec2(p.x,p.y+ep))-noise(vec2(p.x,p.y-ep));
+	return vec2(gradx,grady);
+}
+
+float flow(in vec2 p)
+{
+	float z=2.;
+	float rz = 0.;
+	vec2 bp = p;
+	for (float i= 1.;i < 7.;i++ )
+	{
+		//primary flow speed
+		p += time*.6;
+		
+		//secondary flow speed (speed of the perceived flow)
+		bp += time*1.9;
+		
+		//displacement field (try changing time multiplier)
+		vec2 gr = gradn(i*p*.34+time*1.);
+		
+		//rotation of the displacement field
+		gr*=makem2(time*6.-(0.05*p.x+0.03*p.y)*40.);
+		
+		//displace the system
+		p += gr*.5;
+		
+		//add noise octave
+		rz += (sin(noise(p)*7.)*0.5+0.5)/z;
+		
+		//blend factor (blending displaced system with base system)
+		//you could call this advection factor (.5 being low, .95 being high)
+		p = mix(bp,p,.77);
+		
+		//intensity scaling
+		z *= 1;
+		//octave scaling
+		p *= 2.;
+		bp *= 1.9;
+	}
+	return rz;	
+}
+
+/*============================ REFRACTION IMPLEMENTATION ============================*/
 
 float snellsLaw(float theta_i, float n1, float n2) {
 	return asin((n1/n2) * sin(theta_i));
@@ -57,28 +117,6 @@ float calculateLightColor(float lambda, float thickness, float nAir, float nFilm
 	return 4.0 * intensity * fresnel * sind * sind;
 }
 
-float hash( float n ){
-    return fract(sin(n)*43758.5453);
-}
-
-float noise( in vec3 x ) {
-    vec3 p = floor(x);
-    vec3 f = fract(x);
-
-    f = f*f*(3.0-2.0*f);
-    float n = p.x + p.y*57.0 + 113.0*p.z;
-    return mix(mix(mix( hash(n+  0.0), hash(n+  1.0),f.x),
-                   mix( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y),
-               mix(mix( hash(n+113.0), hash(n+114.0),f.x),
-                   mix( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
-}
-
-vec3 noise3(vec3 x) {
-	return vec3( noise(x+vec3(123.456,.567,.37)),
-				 noise(x+vec3(.11,47.43,19.17)),
-				 noise(x) );
-}
-
 void main() {
 	float minThickness = uThickness.x;
 	float maxThickness = uThickness.y;
@@ -93,9 +131,14 @@ void main() {
 	vec3 viewDir = normalize(-f_in.position);
 	vec3 reflectDir = reflect(-lightDir, norm);
 
-	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb + noise3(f_in.normal);
+	vec2 p = f_in.position.xy / uResolution.xy - 0.5;
+	p.x *= uResolution.x/uResolution.y;
+	p *= 3.;
+	float rz = flow(p);
+
+	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb;
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
-	float w = ((minThickness * (1.0 - t)) + (maxThickness * t));
+	float w = ((minThickness * (1.0 - t)) + (maxThickness * t)) / rz; //introduce noise
 
 	float theta_i = max(dot(norm, lightDir), 0.0);
 
@@ -103,7 +146,7 @@ void main() {
 	float green = calculateLightColor(GREEN, w, 1, ETA, theta_i, intensity);
 	float blue = calculateLightColor(BLUE, w, 1, ETA, theta_i, intensity);
 
-	vec3 filmColour = vec3(red, green, blue);
+	vec3 filmColour = vec3(red, green, blue) / rz;
 	vec3 reflection = texture(uCubeMap, reflectDir).rgb;
 
 	vec3 finalShading = ((1 - transparency) * filmColour) + (intensity * reflection);

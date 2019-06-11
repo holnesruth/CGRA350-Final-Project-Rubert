@@ -34,17 +34,23 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	glUniform3fv(glGetUniformLocation(shader, "uColor"), 1, value_ptr(color));
 	glUniform2fv(glGetUniformLocation(shader, "uThickness"), 1, value_ptr(tParams));
 	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(leParams));
+	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
+	glUniform2fv(glGetUniformLocation(shader, "uResolution"), 1, value_ptr(vec2(8.0, 8.0)));
+
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gradient);
 	glUniform1i(glGetUniformLocation(shader, "uTexture"), 0);
 	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, noise);
+	glUniform1i(glGetUniformLocation(shader, "uNoise"), 1);
+	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMap);
-	glUniform1i(glGetUniformLocation(shader, "uCubeMap"), 1);
+	glUniform1i(glGetUniformLocation(shader, "uCubeMap"), 2);
 
 
 	if (!drawAsSphere) {
 		mesh.draw(); // draw
-	} else {
+	} else { 
 		drawSphere();
 	}
 }
@@ -64,6 +70,7 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//simple_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//bubbles.glsl"));
 	m_shader_bubble = sb.build();
+
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
@@ -79,6 +86,9 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	// set up the thickness texture
 	rgba_image img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//grad.jpg"));
 	m_model.gradient = img.uploadTexture();
+
+	img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//noise.png"));
+	m_model.noise = img.uploadTexture();
 
 	setUpCubeMap("Skansen");
 }
@@ -130,6 +140,8 @@ void Application::render() {
 
 		m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
+		m_model.time += m_speed/100;
+		if (m_model.time > 150) m_model.time = 100;
 	}
 
 	// draw spheres on all points
@@ -173,8 +185,7 @@ void Application::render() {
 }
 
 
-/**  ========================================== My Functions ==========================================*/
-
+/**  ========================================== Robert's Functions ==========================================*/
 
 void Application::AccumulateForces() {
 
@@ -403,7 +414,7 @@ double computeDistance(vec3 A, vec3 B, vec3 C) {
 	return distance(A, P);
 }
 
-/**  ========================================== End of My Functions ==========================================*/
+/**  ========================================== End of Robert's Functions ==========================================*/
 
 void Application::renderGUI() {
 	if (ImGui::BeginMainMenuBar()) {
@@ -471,6 +482,7 @@ void Application::showShaderOptions() {
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
 	ImGui::SliderFloat("Light Intensity", &m_intensity, 0, 1, "%.2f");
 	ImGui::SliderFloat("Opacity", &m_opacity, 0, 1, "%.2f");
+	ImGui::SliderFloat("Speed", &m_speed, 0.1, 20, "%.4f");
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);
