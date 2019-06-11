@@ -27,16 +27,24 @@ using namespace glm;
 void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsSphere) {
 	mat4 modelview = view * modelTransform;
 
-	glUseProgram(shader); // load shader and variables
+	// load shader and variables
+	glUseProgram(shader);
+
+	// matrices
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uProjectionMatrix"), 1, false, value_ptr(proj));
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelViewMatrix"), 1, false, value_ptr(modelview));
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelMatrix"), 1, false, value_ptr(modelTransform));
+
+	// colour
 	glUniform3fv(glGetUniformLocation(shader, "uColor"), 1, value_ptr(color));
 	glUniform2fv(glGetUniformLocation(shader, "uThickness"), 1, value_ptr(tParams));
 	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(leParams));
+
+	// flow noise
 	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
 	glUniform2fv(glGetUniformLocation(shader, "uResolution"), 1, value_ptr(vec2(8.0, 8.0)));
 
+	// textures
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gradient);
 	glUniform1i(glGetUniformLocation(shader, "uTexture"), 0);
@@ -47,15 +55,15 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	glBindTexture(GL_TEXTURE_CUBE_MAP, cubeMap);
 	glUniform1i(glGetUniformLocation(shader, "uCubeMap"), 2);
 
-
+	// decide which mesh to draw
 	if (!drawAsSphere) {
-		mesh.draw(); // draw
+		mesh.draw(); // draw the soft body mesh
 	} else { 
-		drawSphere();
+		drawSphere(); // draw a standard sphere
 	}
 }
 
-
+// Update the models's parameters for shading
 void basic_model::updateParams(float minThickness, float maxThickness, float intensity, float opacity) {
 	tParams.x = minThickness;
 	tParams.y = maxThickness;
@@ -63,33 +71,41 @@ void basic_model::updateParams(float minThickness, float maxThickness, float int
 	leParams.y = opacity;
 }
 
-
+// Load the application
 Application::Application(GLFWwindow* window) : m_window(window) {
 
-	shader_builder sb;
+	// Create the shaders
+	shader_builder sb; 
+	
+	// Bubble shader
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//simple_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//bubbles.glsl"));
 	m_shader_bubble = sb.build();
 
+	// Colour shader for simulation
 	sb.set_shader(GL_VERTEX_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_vert.glsl"));
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
 
+	// Create soft body mesh
 	initializeMesh();
-
-	m_model.shader = m_shader_default;
+	
+	// Setg up model parameters for simulation
 	m_model.mesh = constructMesh(m_points, m_springs);
 	m_model.color = vec3(1, 1, 1);
 
+	// Get the time
 	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
-	// set up the thickness texture
+	// Set up the thickness texture
 	rgba_image img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//grad.jpg"));
 	m_model.gradient = img.uploadTexture();
 
+	// Set up the noise texture
 	img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//noise.png"));
 	m_model.noise = img.uploadTexture();
 
+	// Create the reflections with a cube map
 	setUpCubeMap("Skansen");
 }
 
@@ -111,6 +127,7 @@ void Application::render() {
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LESS);
 
+	// Enable tgransparency
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -122,13 +139,15 @@ void Application::render() {
 		* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
 		* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
 
-
 	// helpful draw options
 	glPolygonMode(GL_FRONT_AND_BACK, (m_showWireframe) ? GL_LINE : GL_FILL);
 
+	// update model parameters for shading
 	m_model.updateParams(m_min, m_max, m_intensity, m_opacity);
-
+	
+	// get the current time
 	double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+
 
 	// if it's time for another simulation step
 	if (millis - m_lastMillis > DT * 1000) {
@@ -140,17 +159,26 @@ void Application::render() {
 
 		m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
+		// update flow noise parameter
 		m_model.time += m_speed/100;
-		if (m_model.time > 150) m_model.time = 100;
+		if (m_model.time > 150) {
+			m_model.time = 100; // reset
+		}
 	}
 
 	// draw spheres on all points
-	if (m_showWireframe) {
+	if (m_current_mode != Shader && m_showWireframe) {
+		GLuint originalShader = m_model.shader;
+		if (originalShader != m_shader_default) {
+			m_model.shader = m_shader_default;
+		}
+
 		for (auto &point : m_points) {
-			//Point point = m_points.at(0);
 			m_model.modelTransform = translate(mat4(1.0f), point.pos) * scale(mat4(1.0f), vec3(0.1f));
 			m_model.draw(view, proj, true);
 		}
+
+		m_model.shader = originalShader;
 	}
 
 	if (m_current_mode == Simulation) {
@@ -160,10 +188,9 @@ void Application::render() {
 		m_model.shader = m_shader_bubble;
 	}
 
-
 	// draw the mesh
 	if (m_current_mode == Shader) {
-		m_model.modelTransform = scale(mat4(1.0), vec3(m_ball_radius)); 
+		m_model.modelTransform = scale(rotate(mat4(1.0f), radians(90.0f), vec3(1, 0, 0)), vec3(m_ball_radius)); 
 	} else {
 		m_model.modelTransform = mat4(1.0);
 	}
@@ -236,7 +263,7 @@ void Application::AccumulateForces() {
 
 	/** ============== Calculate Volume ============================ */
 //    Robust method for calculating volume from Frank Krueger at https://stackoverflow.com/a/1568551
-	double volume = 0;
+	float volume = 0;
 	// for each triangle
 	for (int i = 0; i < m_springs.size(); i += 3) {
 		vec3 p1 = m_points.at(m_springs.at(i).index1).pos;
@@ -480,9 +507,9 @@ void Application::showShaderOptions() {
 	ImGui::PushItemWidth(-120);
 	ImGui::SliderInt("Min Thickness", &m_min, 10, m_max);
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
-	ImGui::SliderFloat("Light Intensity", &m_intensity, 0, 1, "%.2f");
-	ImGui::SliderFloat("Opacity", &m_opacity, 0, 1, "%.2f");
-	ImGui::SliderFloat("Speed", &m_speed, 0.1, 20, "%.4f");
+	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
+	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
+	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 20.0f, "%.2f");
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);
@@ -601,7 +628,7 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 
 
 
-			float dist = computeDistance(objPos, cameraPos, C);
+			/*float dist = computeDistance(objPos, cameraPos, C);
 			cout << "dist: " << dist << endl;
 
 			for (auto& point : m_points) {
@@ -609,7 +636,7 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			}
 
 
-			int x = 0;
+			int x = 0;*/
 			//            std::cout << "objPos: x:" << objPos.x << ", y:" << objPos.y << ", z:" << objPos.z << endl;
 			//            std::cout << "cameraPos: x:" << objPos.x << ", y:" << objPos.y << ", z:" << objPos.z << endl;
 
