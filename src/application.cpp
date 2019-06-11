@@ -69,7 +69,7 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	m_shader_default = sb.build();
 
 	// ====================== Soft body ==========================
-    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_270.obj"));
+    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//triangle_torus_594.obj"));
     cleanMesh(m_mesh);
     m_softbodies.emplace_back();
 
@@ -79,10 +79,12 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	for( auto &softbody : m_softbodies){
 	    m_model.mesh = softbody.constructMesh(m_showWireframe);
 	}
+
 	createBBox();
 	createGroundplane();
 	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
+	m_hiRez_ball = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_1080.obj")).build();
 
     // ====================== Shaders ==========================
     m_model.shader = m_shader_default;
@@ -146,6 +148,7 @@ void Application::render() {
 
     // if in shader mode, dont bother with soft bodies
     if (m_current_mode == Shader) {
+        m_model.mesh = m_hiRez_ball;
         m_model.modelTransform = scale(translate(mat4(1.0), vec3(0, m_ball_radius, 0)), vec3(m_ball_radius));
         m_show_grid = false;
         drawModel(view, proj);
@@ -203,18 +206,19 @@ void Application::render() {
 
 /**  ========================================== Robert Functions ==========================================*/
 
+
 void Application::drawModel(mat4 &view, mat4 &proj){
 
     glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
 
     m_model.leParams.y *= m_intensity;
-    m_model.draw(view, proj, (m_current_mode == Shader));
+    m_model.draw(view, proj, false);
 
     glCullFace(GL_BACK);
 
     m_model.leParams.y = m_opacity;
-    m_model.draw(view, proj, (m_current_mode == Shader));
+    m_model.draw(view, proj, false);
 }
 
 void Application::cleanMesh(mesh_builder &mesh){
@@ -250,7 +254,7 @@ void Application::cleanMesh(mesh_builder &mesh){
     }
 }
 
-void Application::addNewSoftbody(glm::mat4 initialTransform){
+void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     m_softbodies.emplace_back();
     m_softbodies.back().initializeMesh(m_mesh, initialTransform);
     if (m_softbodies.size() > 10){
@@ -261,6 +265,20 @@ void Application::addNewSoftbody(glm::mat4 initialTransform){
     m_softbodies.back().m_kd = m_kd;
     m_softbodies.back().m_ks = m_ks;
     m_softbodies.back().m_pressure = m_pressure;
+
+    if (!printVerts) return;
+
+    int totalPoints = 0;
+    int totalSprings = 0;
+    for (auto &softbody : m_softbodies) {
+        totalPoints += softbody.m_points.size();
+        totalSprings += softbody.m_springs.size();
+    }
+
+    cout << "New soft body added for a total of:" << endl;
+    cout << "\t * " << totalPoints << " Simulating points"  << endl;
+    cout << "\t * " << totalSprings << " Simulating springs"  << endl;
+
 }
 
 void Application::createBBox() {
@@ -340,8 +358,8 @@ void Application::createGroundplane() {
 }
 
 
-
 /**  ========================================== End of Robert Functions ==========================================*/
+
 
 void Application::renderGUI() {
 	if (ImGui::BeginMainMenuBar()) {
@@ -499,7 +517,7 @@ void Application::showModeChanger() {
             for (int i = 0; i < 11; ++i) {
                 vec3 pos = glm::linearRand(min, max);
                 mat4 initialPositionTransform = translate(mat4(1.0f), pos) * scale(mat4(1.0f), vec3(m_ball_radius));
-                addNewSoftbody(initialPositionTransform);
+                addNewSoftbody(initialPositionTransform, i == 10);
             }
 	    }
 	}
@@ -573,7 +591,7 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 
 			if (m_place_softbodies){
                 mat4 initialPositionTransform = translate(mat4(1.0f), rayDestination) * scale(mat4(1.0f), vec3(m_ball_radius));
-                addNewSoftbody(initialPositionTransform);
+                addNewSoftbody(initialPositionTransform, true);
             } else {
                 for (auto &softbody : m_softbodies) {
                     softbody.applyClick(cameraPos, rayDestination, direction, m_ball_radius);

@@ -67,6 +67,7 @@ private:
 	// utility meshes
     cgra::gl_mesh m_bbox_mesh;
     cgra::gl_mesh m_ground_plane_mesh;
+    cgra::gl_mesh m_hiRez_ball;
 
 
     // soft body geometry
@@ -132,7 +133,7 @@ public:
 	/** =========================== Robert Functions ===================== */
 
     static void cleanMesh(cgra::mesh_builder &mesh);
-    void addNewSoftbody(glm::mat4 initialTransform);
+    void addNewSoftbody(glm::mat4 initialTransform, bool printVerts);
     void createBBox();
 
     /** =========================== Ruth Functions ===================== */
