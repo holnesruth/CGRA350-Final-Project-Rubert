@@ -446,12 +446,12 @@ double computeDistance(vec3 A, vec3 B, vec3 C) {
 void Application::renderGUI() {
 	if (ImGui::BeginMainMenuBar()) {
 		if (ImGui::BeginMenu("Options")) {
-			if (ImGui::MenuItem("View")) { m_view = !m_view; }
+			if (ImGui::MenuItem("Toggle View Menu")) { m_view = !m_view; }
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem("Shader")) { m_shade = !m_shade; }
-			if (ImGui::MenuItem("Simulation")) { m_sim = !m_sim; }
+			if (ImGui::MenuItem("Toggle Shader Menu")) { m_shade = !m_shade; }
+			if (ImGui::MenuItem("Toggle Simulation Menu")) { m_sim = !m_sim; }
 
 			ImGui::Separator();
 
@@ -501,7 +501,7 @@ void Application::showViewOptions() {
 void Application::showShaderOptions() {
 	// setup window
 	ImGui::SetNextWindowPos(ImVec2(5, 195), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 150), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 170), ImGuiSetCond_Once);
 	ImGui::Begin("Shader Options", 0);
 
 	ImGui::PushItemWidth(-120);
@@ -509,7 +509,7 @@ void Application::showShaderOptions() {
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
 	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
 	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
-	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 20.0f, "%.2f");
+	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 10.0f, "%.2f");
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);
@@ -522,8 +522,8 @@ void Application::showShaderOptions() {
 
 void Application::showSoftBodyOptions() {
 	// setup window
-	ImGui::SetNextWindowPos(ImVec2(5, 350), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 180), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(5, 370), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 170), ImGuiSetCond_Once);
 	ImGui::Begin("Simulation Options", 0);
 
 	ImGui::PushItemWidth(-120);
@@ -542,11 +542,11 @@ void Application::showSoftBodyOptions() {
 }
 
 void Application::showModeChanger() {
-	ImGui::SetNextWindowPos(ImVec2(m_windowsize.x - 165, 25), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(160, 50), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(5, 545), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 50), ImGuiSetCond_Once);
 	ImGui::Begin("Modes", 0);
 
-	ImGui::PushItemWidth(-60);
+	ImGui::PushItemWidth(-120);
 	ImGui::Combo("Mode", &m_current_mode, m_mode_options, 3);
 
 	ImGui::End();
