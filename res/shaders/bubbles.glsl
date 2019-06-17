@@ -40,7 +40,7 @@ const vec3 DIRECTION = vec3(1, 1, 4);
 
 float time = uTime*0.1;
 
-float noise(vec2 x) { 
+float noise(vec2 x) {
 	return texture(uNoise, x*0.1).x; 
 }
 
@@ -118,13 +118,13 @@ void main() {
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
 	float w = ((minThickness*(1.0 - t)) + (maxThickness*t));
 	
-	vec2 v = (f_in.position.xy / uResolution.xy) - 0.5;
-	v.x *= uResolution.x/uResolution.y;
-	v *= 3.0;
+//	vec2 v = (f_in.position.xy / uResolution.xy) - 0.5;
+//	v.x *= uResolution.x/uResolution.y;
+//	v *= 3.0;
 
 	//introduce noise
 	if (uFlow) {
-		w /= flow(v); 
+		w /= flow(f_in.normal.xy); 
 	} else {
 		w /= noise(f_in.textureCoord.xy);
 	}

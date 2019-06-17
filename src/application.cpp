@@ -89,7 +89,7 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	m_shader_default = sb.build();
 
 	// ====================== Soft body ==========================
-    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//triangle_torus_594.obj"));
+    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_480.obj"));
     cleanMesh(m_mesh);
     m_softbodies.emplace_back();
 
@@ -252,17 +252,16 @@ void Application::render() {
 
 
 void Application::drawModel(mat4 &view, mat4 &proj){
-
-    glEnable(GL_CULL_FACE);
+	glEnable(GL_CULL_FACE);
     glCullFace(GL_FRONT);
 
     m_model.leParams.y *= m_intensity;
-    m_model.draw(view, proj, false);
+    m_model.draw(view, proj, m_current_mode == Shader);
 
     glCullFace(GL_BACK);
 
     m_model.leParams.y = m_opacity;
-    m_model.draw(view, proj, false);
+    m_model.draw(view, proj, m_current_mode == Shader);
 }
 
 void Application::cleanMesh(mesh_builder &mesh){
@@ -301,7 +300,7 @@ void Application::cleanMesh(mesh_builder &mesh){
 void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     m_softbodies.emplace_back();
     m_softbodies.back().initializeMesh(m_mesh, initialTransform);
-    if (m_softbodies.size() > 10){
+    if (m_softbodies.size() > 20){
         m_softbodies.erase(m_softbodies.begin());
     }
     m_softbodies.back().m_gravity = m_gravity;
@@ -509,12 +508,12 @@ void Application::showSoftBodyOptions() {
             softbody.m_kd = m_kd;
         }
     }
-    if (ImGui::SliderFloat("Spring factor", &m_ks, 0, 7)){
+    if (ImGui::SliderFloat("Spring factor", &m_ks, 0, 9)){
         for (auto &softbody : m_softbodies) {
             softbody.m_ks = m_ks;
         }
     }
-	if (ImGui::SliderFloat("Pressure factor", &m_pressure, 0, 200)){
+	if (ImGui::SliderFloat("Pressure factor", &m_pressure, 0, 400)){
         for (auto &softbody : m_softbodies) {
             softbody.m_pressure = m_pressure;
         }
@@ -531,11 +530,11 @@ void Application::showSoftBodyOptions() {
 }
 
 void Application::showModeChanger() {
-	ImGui::SetNextWindowPos(ImVec2(m_windowsize.x - 165, 25), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(160, 50), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(m_windowsize.x - 230, 25), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(225, 50), ImGuiSetCond_Once);
 	ImGui::Begin("Modes", 0);
 
-    ImGui::PushItemWidth(-120);
+    ImGui::PushItemWidth(-60);
 	if (ImGui::Combo("Mode", &m_current_mode, m_mode_options, 3)){
         for (auto &softbody : m_softbodies)
             softbody.resetSimulation();
@@ -543,8 +542,8 @@ void Application::showModeChanger() {
              m_gravity = 1;
              m_mass = 1.0;
              m_kd = 6;
-             m_ks = 6;
-             m_pressure = 100;
+             m_ks = 8;
+             m_pressure = 300;
 
              // clear all somebodies
              m_softbodies.erase(m_softbodies.begin(), m_softbodies.end());
@@ -558,16 +557,16 @@ void Application::showModeChanger() {
             m_gravity = 0.025;
             m_mass = 1.0;
             m_kd = 6;
-            m_ks = 6;
-            m_pressure = 100;
+            m_ks = 8;
+            m_pressure = 300;
 
             vec3 min = vec3(-bbox.x * 0.75, -bbox.y * 0.75, -bbox.z * 0.75);
             vec3 max = vec3(bbox.x * 0.75, bbox.y * 0.75, bbox.z * 0.75);
 
-            for (int i = 0; i < 11; ++i) {
+            for (int i = 0; i < 21; ++i) {
                 vec3 pos = glm::linearRand(min, max);
                 mat4 initialPositionTransform = translate(mat4(1.0f), pos) * scale(mat4(1.0f), vec3(m_ball_radius));
-                addNewSoftbody(initialPositionTransform, i == 10);
+                addNewSoftbody(initialPositionTransform, i == 20);
             }
 	    }
 	}
@@ -608,15 +607,15 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 		if (action == GLFW_PRESS) {
 			lastDown = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 		}
-		if (action == GLFW_RELEASE && chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count() - lastDown < 100) {
+		if (action == GLFW_RELEASE && chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count() - lastDown < 500) {
             // if not in simulation/final mode, skip this
 		    if (m_current_mode == Shader) return;
 
 			// https://stackoverflow.com/a/30005258
 			/** ================================================================================================ */
 			// Normalized Device Coordinates
-			float mouseX = m_mousePosition.x * 2 / (m_windowsize.x * 0.5f) - 1.0f;
-			float mouseY = m_mousePosition.y * 2 / (m_windowsize.y * 0.5f) - 1.0f;
+			float mouseX = m_mousePosition.x / (m_windowsize.x * 0.5f) - 1.0f;
+			float mouseY = m_mousePosition.y / (m_windowsize.y * 0.5f) - 1.0f;
 
 			mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.y, 0.3f, 1000.f);
 			mat4 view = translate(mat4(1), vec3(3, 0, -m_distance))
@@ -633,7 +632,7 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 			/** ================================================================================================ */
 
 			vec4 viewport = vec4(0, 0, m_windowsize.x, m_windowsize.y);
-			vec3 mousePos = vec3(m_mousePosition.x * 2, viewport.w - m_mousePosition.y * 2, 0.01);
+			vec3 mousePos = vec3(m_mousePosition.x, viewport.w - m_mousePosition.y, 0.01);
 
 			vec3 cameraPos = unProject(mousePos, view, proj, viewport);
 
