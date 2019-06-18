@@ -22,10 +22,13 @@ struct basic_model {
     GLuint gradient;
 	GLuint noise;
     GLuint cubeMap;
-    glm::vec2 tParams;
-    glm::vec2 leParams;
+
+    glm::vec2 thicknessParams;
+    glm::vec2 lightParams;
+	glm::vec2 flowSpeeds = glm::vec2(0.6, 1.6);
+
 	float time = 100.0;
-	bool flow = false;
+	int flowOctaves = 7;
 
     void draw(const glm::mat4 &view, const glm::mat4 proj, bool drawAsSphere);
     void updateParams(float minThickness, float maxThickness, float intensity, float transparency);
@@ -106,6 +109,9 @@ private:
                                 "Tantolunden" };
     int m_map = 8;
 
+	// Flow noise
+	bool m_flow = false;
+
     /** =========================== Shared Parameters ===================== */
 
 	// Shaders
@@ -155,6 +161,8 @@ public:
     /** =========================== Ruth's Functions ===================== */
 
 	void drawModel(glm::mat4& view, glm::mat4& proj);
+
+	void updateFlow();
 
     // Load a cubemap from a vector of image filenames
     unsigned int loadCubemap(std::vector<std::string> cubeFaces);

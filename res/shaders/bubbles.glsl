@@ -1,8 +1,10 @@
 #version 330 core
 
+// useful values
 #define M_PI 3.1415926535897932384626433832795
 #define ETA 1.4
 
+// wavelengths
 #define RED 700
 #define GREEN 560
 #define BLUE 460
@@ -20,9 +22,8 @@ uniform vec2 uThickness;
 uniform vec2 uLightEffects;
 
 uniform float uTime;
-uniform vec2 uResolution;
-
-uniform bool uFlow;
+uniform int uOctaves;
+uniform vec2 uFlowSpeeds;
 
 // viewspace data (this must match the output of the vertex shader)
 in VertexData {
@@ -34,107 +35,187 @@ in VertexData {
 // framebuffer output
 out vec4 fb_color;
 
+// light direction
 const vec3 DIRECTION = vec3(1, 1, 4);
 
-/*============================ FLOW NOISE IMPLEMENTATION ============================*/
+/*============================ FLOW NOISE ============================*/
 
 float time = uTime*0.1;
 
-float noise(vec2 x) {
-	return texture(uNoise, x*0.1).x; 
+
+/**
+ * Sample a noise texture with a specific uv
+ */
+float noise(vec2 uv) {
+	return texture(uNoise, 0.1*uv).x; 
 }
 
-float flow(vec2 v) {
+
+/**
+ * Create a 2x2 rotation matrix from an angle, theta
+ */
+mat2 rotation_matrix(float theta) {
+	float c = cos(theta);
+	float s = sin(theta);
+	return mat2(c, -s, 
+				s, c);
+}
+
+
+/**
+ * Find the gradient of a vector using the definition of the derivative
+ */
+vec2 gradient_vec(vec2 v) {
+	float epsilon = 0.09;
+
+	float dvdx = noise(vec2(v.x + epsilon, v.y)) - noise(vec2(v.x - epsilon, v.y));
+	float dvdy = noise(vec2(v.x, v.y + epsilon)) - noise(vec2(v.x, v.y - epsilon));
+
+	return vec2(dvdx, dvdy);
+}
+
+
+/**
+ * Calculate the flow of the liquid in the soap film using a specified number of noise octaves
+ */
+float flow(vec2 pos, float octaves) {
 	float divisor = 2.0;
 	float result = 0.0;
-	vec2 base = v;
-	float octaves = 7.0;
+	vec2 basePos = pos;
 
-	for (float i = 1.0; i < octaves; i++) {
-		//primary flow speed
-		v += time*0.6;
+	for (float octave = 1.0; octave < octaves; octave++) {
 		
-		//add noise octave
-		result += (sin(noise(v)*octaves)*0.5 + 0.5)/divisor;
+		/* === Calculate flow === */
+
+		pos += time * uFlowSpeeds.x;		//dynamic flow speed 
+		basePos += time * uFlowSpeeds.y;	//static flow speed
 		
-		//blend factor - 0.5 being low, 0.95 being high
-		v = mix(base, v, 0.77);
+		vec2 gradient = gradient_vec(octave*pos*0.34 + time*0.1);		//find the gradient of the point
+		gradient *= rotation_matrix(6.0*time - 2.0*pos.x - 1.2*pos.y);	//rotate the gradient
+
+		pos += gradient * 0.5;	//add the rotated gradient to the vector
 		
-		//intensity scaling
+		//add noise for this octave to the result
+		result += (sin(noise(pos)*octaves) + 1.0)/(2.0 * divisor);
+		
+		/* === Next octave === */
+
+		//blend the static and dynamic flows together
+		//a blend factor of 0.5 is low, 0.95 is high
+		pos = mix(basePos, pos, 0.77);
+		
+		//make noise less intense for next octave
 		divisor *= 1.4;
 
-		//octave scaling
-		v *= 2.0;
-		base *= 1.9;
+		//add scaling to the position and base between octaves
+		pos *= 2.0;
+		basePos *= 1.9;
 	}
 
-	return result;	
+	return result;
 }
 
-/*============================ REFRACTION IMPLEMENTATION ============================*/
 
+/*============================ REFLECTANCE ============================*/
+
+
+/** 
+ * Find the refraction angle of light when traveling between two mediums
+ *
+ * theta_i: The angle of incidence
+ * n1: The index of refraction of the material the light is leaving
+ * n2: The index of refraction of the material the light is entering
+ */
 float snellsLaw(float theta_i, float n1, float n2) {
 	return asin((n1/n2)*sin(theta_i));
 }
 
+
+/** 
+ * Calculate the reflectance of light when travelling between two mediums
+ *
+ * theta_i: The angle of incidence
+ * theta_t: The angle of refraction
+ * n1: The index of refraction of the material the light is leaving
+ * n2: The index of refraction of the material the light is entering
+ */
 float fresnel(float theta_i, float theta_t, float n1, float n2) {
+	// s-polarised light
 	float num = n1*cos(theta_i) - n2*cos(theta_t);
 	float den = n1*cos(theta_i) + n2*cos(theta_t);
 	float Rs = pow(abs(num/den), 2);
 
+	// p-polarised light
 	num = n1*cos(theta_t) - n2*cos(theta_i);
 	den = n1*cos(theta_t) + n2*cos(theta_i);
 	float Rp = pow(abs(num/den), 2);
 
-	return 2.0*(Rs + Rp); //Scalar should be 0.5 but the colours aren't very vibrant
+	// effective reflectance
+	float reflectance = 0.5*(Rs + Rp);
+
+	return 4.0 * reflectance;
 }
 
-float calculateLightColor(float lambda, float thickness, float nAir, float nFilm, float theta_i, float intensity) {
-	float theta_t = max(snellsLaw(theta_i, nAir, nFilm), 0.0);
 
-	float d = 2 * M_PI * thickness * nFilm * cos(theta_t);
+/** 
+ * Calculate the colour of light that reflects from the surface
+ *
+ * lambda: The wavelength of the light
+ * thickness: The thickness of the film
+ * n1: The index of refraction of the material the light is leaving
+ * n2: The index of refraction of the material the light is entering
+ * theta_i: The angle of incidence
+ * intensity: The intensity of the light ray
+ */
+float calculateLightColor(float lambda, float thickness, float n1, float n2, float theta_i, float intensity) {
+	float theta_t = max(snellsLaw(theta_i, n1, n2), 0.0);
+	float reflectance = fresnel(theta_i, theta_t, n1, n2);
+
+	// Extra distance covered by rays that travel through the film before reflecting (simplified for later)
+	float d = 2.0 * M_PI * thickness * n2 * cos(theta_t);
 	float sind = sin(d/lambda);
 
-	float fresnel = fresnel(theta_i, theta_t, nAir, nFilm);
-
-	return 4.0 * intensity * fresnel * sind * sind;
+	return 4.0 * intensity * reflectance * sind * sind;
 }
 
+
+/* ========================= MAIN ======================== */
+
+
 void main() {
+	//get the parameters out of the uniforms
 	float minThickness = uThickness.x;
 	float maxThickness = uThickness.y;
 	float intensity = uLightEffects.x;
 	float transparency = uLightEffects.y;
 
+	//save the normal vector for later
 	vec3 norm = f_in.normal;
 
-	vec4 light = uProjectionMatrix * vec4(DIRECTION, 1.0);
-	vec3 lightDir = normalize(vec3(light));
-
-	vec3 viewDir = normalize(-f_in.position);
-	vec3 reflectDir = reflect(-lightDir, norm);
-
+	// find the thickness of the film for this fragment
 	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb;
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
-	float w = ((minThickness*(1.0 - t)) + (maxThickness*t));
+	float w = (1.0 - t)*minThickness + t*maxThickness;
+	w /= flow(norm.xy, uOctaves);	//introduce noise
 
-	//introduce noise
-	if (uFlow) {
-		w /= flow(f_in.normal.xy); 
-	} else {
-		w /= noise(f_in.textureCoord.xy);
-	}
-
+	//find the angle of incidence of the light
+	vec4 light = uProjectionMatrix * vec4(DIRECTION, 1.0);
+	vec3 lightDir = normalize(vec3(light));
 	float theta_i = max(dot(norm, lightDir), 0.0);
 
-	float red = calculateLightColor(RED, w, 1, ETA, theta_i, intensity);
-	float green = calculateLightColor(GREEN, w, 1, ETA, theta_i, intensity);
-	float blue = calculateLightColor(BLUE, w, 1, ETA, theta_i, intensity);
+	//calculate the colour of reflected light for rgb wavelengths
+	float red = calculateLightColor(RED, w, 1.0, ETA, theta_i, intensity);
+	float green = calculateLightColor(GREEN, w, 1.0, ETA, theta_i, intensity);
+	float blue = calculateLightColor(BLUE, w, 1.0, ETA, theta_i, intensity);
 
 	vec3 filmColour = vec3(red, green, blue);
+
+	//calculate the reflection for this fragment
+	vec3 reflectDir = reflect(-lightDir, norm);
 	vec3 reflection = texture(uCubeMap, reflectDir).rgb;
 
-	vec3 finalShading = ((1 - transparency) * filmColour) + (intensity * reflection);
+	//combine the film colour and reflections for the result
+	vec3 finalShading = (1 - transparency)*filmColour + intensity*reflection;
 	
 	// output to the framebuffer
 	fb_color = vec4(finalShading, transparency);

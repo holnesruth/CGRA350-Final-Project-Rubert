@@ -37,13 +37,13 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 
 	// colour
 	glUniform3fv(glGetUniformLocation(shader, "uColor"), 1, value_ptr(color));
-	glUniform2fv(glGetUniformLocation(shader, "uThickness"), 1, value_ptr(tParams));
-	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(leParams));
+	glUniform2fv(glGetUniformLocation(shader, "uThickness"), 1, value_ptr(thicknessParams));
+	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(lightParams));
 
-	// flow noise
+	// flow noise animation step
 	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
-	glUniform2fv(glGetUniformLocation(shader, "uResolution"), 1, value_ptr(vec2(8.0, 8.0)));
-	glUniform1i(glGetUniformLocation(shader, "uFlow"), flow);
+	glUniform1i(glGetUniformLocation(shader, "uOctaves"), flowOctaves);
+	glUniform2fv(glGetUniformLocation(shader, "uFlowSpeeds"), 1, value_ptr(flowSpeeds));
 
 	// textures
 	glActiveTexture(GL_TEXTURE0);
@@ -68,10 +68,10 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 // Update the models's parameters for shading
 void basic_model::updateParams(float minThickness, float maxThickness, float intensity, float opacity) {
 
-	tParams.x = minThickness;
-	tParams.y = maxThickness;
-	leParams.x = intensity;
-	leParams.y = opacity;
+	thicknessParams.x = minThickness;
+	thicknessParams.y = maxThickness;
+	lightParams.x = intensity;
+	lightParams.y = opacity;
 }
 
 
@@ -190,10 +190,7 @@ void Application::render() {
 
         // update flow noise parameter without simulation step
         if (millis - m_lastMillis > DT * 1000) {
-            m_model.time += m_speed / 100;
-            if (m_model.time > 150) {
-                m_model.time = 100; // reset
-            }
+			updateFlow();
 
             m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                     chrono::system_clock::now().time_since_epoch()).count();
@@ -207,10 +204,7 @@ void Application::render() {
     if (millis - m_lastMillis > DT * 1000) {
 
 		// update flow noise parameter
-        m_model.time += m_speed / 100;
-        if (m_model.time > 150) {
-            m_model.time = 100; // reset
-        }
+		updateFlow();        
 
         for (auto &softbody : m_softbodies)
             softbody.updateCentroid();
@@ -410,13 +404,23 @@ void Application::drawModel(mat4& view, mat4& proj) {
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 
-	m_model.leParams.y *= m_intensity;
+	m_model.lightParams.y *= m_intensity;
 	m_model.draw(view, proj, m_current_mode == Shader);
 
 	glCullFace(GL_BACK);
 
-	m_model.leParams.y = m_opacity;
+	m_model.lightParams.y = m_opacity;
 	m_model.draw(view, proj, m_current_mode == Shader);
+}
+
+
+void Application::updateFlow() {
+	if (m_flow) {
+		m_model.time += m_speed / 100;
+		if (m_model.time > 150) {
+			m_model.time = 100; // reset
+		}
+	}
 }
 
 
@@ -526,7 +530,7 @@ void Application::showViewOptions() {
 void Application::showShaderOptions() {
 	// setup window
 	ImGui::SetNextWindowPos(ImVec2(5, 195), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 170), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 240), ImGuiSetCond_Once);
 	ImGui::Begin("Shader Options", 0);
 
 	ImGui::PushItemWidth(-120);
@@ -537,9 +541,12 @@ void Application::showShaderOptions() {
 	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
 	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
 
-	ImGui::Checkbox("Flow", &m_model.flow);
+	ImGui::Checkbox("Flow", &m_flow);
 	ImGui::SameLine();
 	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 10.0f, "%.2f");
+	ImGui::SliderFloat("Dynamic Flow", &m_model.flowSpeeds.x, 0.1f, 0.6f, "%.2f");
+	ImGui::SliderFloat("Static Flow", &m_model.flowSpeeds.y, 0.8f, 2.4f, "%.2f");
+	ImGui::SliderInt("Noise Levels", &m_model.flowOctaves, 4, 20);
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);
@@ -552,8 +559,8 @@ void Application::showShaderOptions() {
 
 void Application::showSoftBodyOptions() {
 	// setup window
-	ImGui::SetNextWindowPos(ImVec2(5, 370), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 189), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(5, 440), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 190), ImGuiSetCond_Once);
 	ImGui::Begin("Simulation Options", 0);
 
 	ImGui::PushItemWidth(-120);
