@@ -25,6 +25,7 @@ using namespace glm;
 
 
 void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsSphere) {
+
 	mat4 modelview = view * modelTransform;
 
 	// load shader and variables
@@ -64,16 +65,41 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	}
 }
 
+
 // Update the models's parameters for shading
 void basic_model::updateParams(float minThickness, float maxThickness, float intensity, float opacity) {
+
 	tParams.x = minThickness;
 	tParams.y = maxThickness;
 	leParams.x = intensity;
 	leParams.y = opacity;
 }
 
+
 // Load the application
 Application::Application(GLFWwindow* window) : m_window(window) {
+
+	// ========================== Soft body ==========================
+
+	// Load object to simulate
+    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_480.obj"));
+    cleanMesh(m_mesh);
+    m_softbodies.emplace_back();
+
+	// Initialise the simulation
+    mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
+    m_softbodies.at(0).initializeMesh(m_mesh, initialPositionTransform);
+
+	for( auto &softbody : m_softbodies){
+	    m_model.mesh = softbody.constructMesh(m_showWireframe);
+	}
+
+	// Set up simulation scene
+	createBBox();
+	createGroundplane();
+	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
+
+    // ========================== Shaders ==========================
 
 	// Create the shaders
 	shader_builder sb;
@@ -88,27 +114,8 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	sb.set_shader(GL_FRAGMENT_SHADER, CGRA_SRCDIR + std::string("//res//shaders//color_frag.glsl"));
 	m_shader_default = sb.build();
 
-	// ====================== Soft body ==========================
-    m_mesh = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_480.obj"));
-    cleanMesh(m_mesh);
-    m_softbodies.emplace_back();
-
-    mat4 initialPositionTransform = translate(mat4(1.0f), vec3(0, 2, 0)) * scale(mat4(1.0f), vec3(m_ball_radius));
-    m_softbodies.at(0).initializeMesh(m_mesh, initialPositionTransform);
-
-	for( auto &softbody : m_softbodies){
-	    m_model.mesh = softbody.constructMesh(m_showWireframe);
-	}
-
-	createBBox();
-	createGroundplane();
-	m_lastMillis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
-
-	m_hiRez_ball = load_wavefront_data(CGRA_SRCDIR + std::string("/res//assets//ball_1080.obj")).build();
-
-    // ====================== Shaders ==========================
-    m_model.shader = m_shader_default;
-	m_model.color = vec3(1, 1, 1);
+	// Give the model a default colour
+	m_model.color = vec3(1, 1, 1); // white
 
 	// set up the thickness texture
 	rgba_image img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//grad.jpg"));
@@ -118,12 +125,14 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	img = rgba_image(CGRA_SRCDIR + std::string("//res//textures//noise.png"));
 	m_model.noise = img.uploadTexture();
 
-	// Create the reflections with a cube map
+	// Create the bubble reflections with a cube map
 	setUpCubeMap("Skansen");
 }
 
 
 void Application::render() {
+	
+	/* ============================= Render Setup =============================== */
 
 	// retrieve the window height
 	int width, height;
@@ -154,11 +163,13 @@ void Application::render() {
 
 	// helpful draw options
 	glPolygonMode(GL_FRONT_AND_BACK, (m_showWireframe) ? GL_LINE : GL_FILL);
+	if (m_show_grid) drawGrid(view, proj);
+	if (m_show_axis) drawAxis(view, proj);
 
 	// update model parameters for shading
 	m_model.updateParams(m_min, m_max, m_intensity, m_opacity);
 
-
+	// choose shader to use for render
     if (m_current_mode == Simulation || m_showWireframe) {
         m_model.shader = m_shader_default;
     }
@@ -166,36 +177,37 @@ void Application::render() {
         m_model.shader = m_shader_bubble;
     }
 
-
-    if (m_show_grid) drawGrid(view, proj);
-	if (m_show_axis) drawAxis(view, proj);
-
     double millis = chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now().time_since_epoch()).count();
 
-
+	/* ============================== Shader mode ========================= */
 
     // if in shader mode, dont bother with soft bodies
     if (m_current_mode == Shader) {
-        m_model.mesh = m_hiRez_ball;
+
         m_model.modelTransform = scale(rotate(mat4(1.0f), radians(90.0f), vec3(1, 0, 0)), vec3(m_ball_radius));
         m_show_grid = false;
+
         drawModel(view, proj);
 
-        // update flow noise parameter
+        // update flow noise parameter without simulation step
         if (millis - m_lastMillis > DT * 1000) {
             m_model.time += m_speed / 100;
             if (m_model.time > 150) {
                 m_model.time = 100; // reset
             }
+
             m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                     chrono::system_clock::now().time_since_epoch()).count();
         }
-        return;
+
+        return; // finished rendering
     }
 
-    /** ============ Simulation Step ====================== */
+    /** ================== Simulation Step ====================== */
+
     if (millis - m_lastMillis > DT * 1000) {
 
+		// update flow noise parameter
         m_model.time += m_speed / 100;
         if (m_model.time > 150) {
             m_model.time = 100; // reset
@@ -208,12 +220,13 @@ void Application::render() {
             softbody.AccumulateForces();
             softbody.IntegrateForces(m_current_mode != FullDemo, m_softbodies, m_ball_radius);
         }
+
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                 chrono::system_clock::now().time_since_epoch()).count();
-
     }
 
     /** ============ Draw Softbodies ====================== */
+
     for (auto &softbody : m_softbodies) {
 
         m_model.mesh = softbody.constructMesh(m_showWireframe);
@@ -229,10 +242,11 @@ void Application::render() {
         m_model.modelTransform = mat4(1.0);
 
         drawModel(view, proj);
-
     }
 
-    m_model.shader = m_shader_default;
+	/* ==================== Draw Scene =================== */
+
+    m_model.shader = m_shader_default; // set default shader for scenery
 
     // draw bounding box
     m_model.mesh = m_bbox_mesh;
@@ -243,30 +257,16 @@ void Application::render() {
         m_model.mesh = m_ground_plane_mesh;
     }
     drawModel(view, proj);
-
-
 }
 
 
-/**  ========================================== Robert Functions ==========================================*/
+/**  ========================================== Robert's Functions ==========================================*/
 
 
-void Application::drawModel(mat4 &view, mat4 &proj){
-	glEnable(GL_CULL_FACE);
-    glCullFace(GL_FRONT);
-
-    m_model.leParams.y *= m_intensity;
-    m_model.draw(view, proj, m_current_mode == Shader);
-
-    glCullFace(GL_BACK);
-
-    m_model.leParams.y = m_opacity;
-    m_model.draw(view, proj, m_current_mode == Shader);
-}
-
+// Clean up the mesh data
 void Application::cleanMesh(mesh_builder &mesh){
-    /** ============== Clean up the mesh data ============== */
-    // for every vert in the mesh
+    
+	// for every vert in the mesh
     for (int i = mesh.vertices.size() - 1; i >= 0; i--) {
         vec3 vertPos = mesh.vertices.at(i).pos;
 
@@ -297,6 +297,7 @@ void Application::cleanMesh(mesh_builder &mesh){
     }
 }
 
+
 void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     m_softbodies.emplace_back();
     m_softbodies.back().initializeMesh(m_mesh, initialTransform);
@@ -323,6 +324,7 @@ void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     cout << "\t * " << totalSprings << " Simulating springs"  << endl;
 
 }
+
 
 void Application::createBBox() {
     mesh_builder mb(GL_LINES);
@@ -376,6 +378,7 @@ void Application::createBBox() {
     m_bbox_mesh = mb.build();
 }
 
+
 void Application::createGroundplane() {
 
     mesh_builder mb;
@@ -401,7 +404,69 @@ void Application::createGroundplane() {
 }
 
 
-/**  ========================================== End of Robert Functions ==========================================*/
+/**  ========================================== Ruth's Functions ==========================================*/
+
+
+void Application::drawModel(mat4& view, mat4& proj) {
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
+
+	m_model.leParams.y *= m_intensity;
+	m_model.draw(view, proj, m_current_mode == Shader);
+
+	glCullFace(GL_BACK);
+
+	m_model.leParams.y = m_opacity;
+	m_model.draw(view, proj, m_current_mode == Shader);
+}
+
+
+// loads a cubemap texture from 6 individual texture faces
+// Tutorial source := www.learnopengl.com
+unsigned int Application::loadCubemap(vector<std::string> cubeFaces) {
+	unsigned int id;
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, id);
+
+	int width, height, channels;
+	for (unsigned int i = 0; i < cubeFaces.size(); i++) {
+		unsigned char* imageData = stbi_load(cubeFaces[i].c_str(), &width, &height, &channels, 0);
+		if (imageData) {
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, imageData);
+			stbi_image_free(imageData);
+		}
+		else {
+			std::cout << "Cubemap texture failed to load at path: " << cubeFaces[i] << std::endl;
+			stbi_image_free(imageData);
+		}
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	return id;
+}
+
+
+void Application::setUpCubeMap(char* mapName) {
+
+	std::string cubeMapPath = CGRA_SRCDIR + std::string("//res//textures//cube_maps//") + std::string(mapName);
+
+	// Create the vector of image paths for passing to loadCubemap
+	vector<std::string> faces{
+		(cubeMapPath + std::string("//posx.jpg")),
+		(cubeMapPath + std::string("//negx.jpg")),
+		(cubeMapPath + std::string("//negy.jpg")),
+		(cubeMapPath + std::string("//posy.jpg")),
+		(cubeMapPath + std::string("//posz.jpg")),
+		(cubeMapPath + std::string("//negz.jpg")),
+	};
+
+	// set up the cubemap for shading
+	m_model.cubeMap = loadCubemap(faces);
+}
 
 
 void Application::renderGUI() {
@@ -575,6 +640,9 @@ void Application::showModeChanger() {
 }
 
 
+/* =========================== Robert's User Interaction ============================ */
+
+
 void Application::cursorPosCallback(double xpos, double ypos) {
 	if (m_leftMouseDown) {
 		vec2 whsize = m_windowsize / 2.0f;
@@ -652,6 +720,9 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
 }
 
 
+/* ===================== Default methods ======================= */
+
+
 void Application::scrollCallback(double xoffset, double yoffset) {
 	(void)xoffset; // currently un-used
 	m_distance *= pow(1.1f, -yoffset);
@@ -666,47 +737,3 @@ void Application::keyCallback(int key, int scancode, int action, int mods) {
 void Application::charCallback(unsigned int c) {
 	(void)c; // currently un-used
 }
-
-// loads a cubemap texture from 6 individual texture faces
-// Tutorial source := www.learnopengl.com
-// -------------------------------------------------------
-unsigned int Application::loadCubemap(vector<std::string> cubeFaces) {
-	unsigned int id;
-	glGenTextures(1, &id);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, id);
-
-	int width, height, channels;
-	for (unsigned int i = 0; i < cubeFaces.size(); i++) {
-		unsigned char* imageData = stbi_load(cubeFaces[i].c_str(), &width, &height, &channels, 0);
-		if (imageData) {
-			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, imageData);
-			stbi_image_free(imageData);
-		}
-		else {
-			std::cout << "Cubemap texture failed to load at path: " << cubeFaces[i] << std::endl;
-			stbi_image_free(imageData);
-		}
-	}
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
-	return id;
-}
-
-void Application::setUpCubeMap(char* name) {
-	// set up the cubemap
-	std::string cubeMapPath = CGRA_SRCDIR + std::string("//res//textures//cube_maps//") + std::string(name);
-	vector<std::string> faces{
-		(cubeMapPath + std::string("//posx.jpg")),
-		(cubeMapPath + std::string("//negx.jpg")),
-		(cubeMapPath + std::string("//negy.jpg")),
-		(cubeMapPath + std::string("//posy.jpg")),
-		(cubeMapPath + std::string("//posz.jpg")),
-		(cubeMapPath + std::string("//negz.jpg")),
-	};
-	m_model.cubeMap = loadCubemap(faces);
-}
-

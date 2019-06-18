@@ -4,33 +4,38 @@
 
 #include "Softbody.h"
 
-// std
-
 // glm
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/random.hpp>
 #include <algorithm>
 
+
 using namespace std;
 using namespace cgra;
 using namespace glm;
 
+
 double Softbody::computeDistance(vec3 A, vec3 B, vec3 C) {
+
     vec3 d = (C - B) / distance(C, B);
     vec3 v = A - B;
     float t = dot(v, d);
     vec3 P = B + (t * d);
+
     return distance(A, P);
 }
 
+
 float Softbody::myMap(float value, float start1, float stop1, float start2, float stop2) {
+
     float val = start2 + (stop2 - start2) * ((value - start1) / (stop1 - start1));
     if (val > stop2)
         return stop2;
     else
         return val;
 }
+
 
 void Softbody::applyClick(glm::vec3 cameraPos, glm::vec3 rayDestination, glm::vec3 direction, float ball_radius) {
     
@@ -40,6 +45,7 @@ void Softbody::applyClick(glm::vec3 cameraPos, glm::vec3 rayDestination, glm::ve
         point.vel += direction * vel;
     }
 }
+
 
 void Softbody::AccumulateForces() {
 
@@ -77,7 +83,7 @@ void Softbody::AccumulateForces() {
     }
 
     /** ============== Calculate Volume ============================ */
-//    Robust method for calculating volume from Frank Krueger at https://stackoverflow.com/a/1568551
+	// Robust method for calculating volume from Frank Krueger at https://stackoverflow.com/a/1568551
     double volume = 0;
     // for each triangle
     for (int i = 0; i < m_springs.size(); i += 3) {
@@ -109,12 +115,11 @@ void Softbody::AccumulateForces() {
             m_points.at(s.index2).force += pressureValue * s.normal;
         }
     }
-
-
-
 }
 
+
 void Softbody::IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softbodies, float ball_radius) {
+
     // integrate forces
     for (auto& pnt : m_points) {
         pnt.vel += (pnt.force / m_mass) * DT;
@@ -168,7 +173,9 @@ void Softbody::IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softb
     }
 }
 
+
 void Softbody::updateCentroid(){
+
     vec3 total = vec3(0);
     for (auto &point : m_points) {
         total+=point.pos;
@@ -176,10 +183,9 @@ void Softbody::updateCentroid(){
     m_centroid = total / (float) m_points.size();
 }
 
+
+/* Construct points and springs from clean mesh data */
 void Softbody::initializeMesh(mesh_builder mesh, mat4 initialTransform) {
-
-
-    /** ============== Construct points and springs from clean mesh data ============== */
 
     for (auto& meshVertex : mesh.vertices) {
         vec4 initialPos = vec4(meshVertex.pos.x, meshVertex.pos.y, meshVertex.pos.z, 1);
@@ -246,8 +252,6 @@ cgra::gl_mesh Softbody::constructMesh(bool showWireframe) {
         }
         return m_mesh.build();
     }
-
-
 }
 
 

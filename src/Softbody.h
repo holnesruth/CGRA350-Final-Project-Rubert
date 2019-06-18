@@ -61,7 +61,6 @@ public:
 
     void applyClick(glm::vec3 cameraPos, glm::vec3 rayDestination, glm::vec3 direction, float ball_radius);
 
-
     void AccumulateForces();
 
     void IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softbodies, float ball_radius);

@@ -117,10 +117,6 @@ void main() {
 	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb;
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
 	float w = ((minThickness*(1.0 - t)) + (maxThickness*t));
-	
-//	vec2 v = (f_in.position.xy / uResolution.xy) - 0.5;
-//	v.x *= uResolution.x/uResolution.y;
-//	v *= 3.0;
 
 	//introduce noise
 	if (uFlow) {

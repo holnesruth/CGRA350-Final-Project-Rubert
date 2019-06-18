@@ -20,6 +20,7 @@ struct basic_model {
     cgra::gl_mesh mesh;
     glm::vec3 color{0.7};
     glm::mat4 modelTransform{1.0};
+
     GLuint gradient;
 	GLuint noise;
     GLuint cubeMap;
@@ -41,6 +42,7 @@ private:
 	glm::vec2 m_windowsize;
 	GLFWwindow *m_window;
 
+	// gui window booleans for show/hide
 	bool m_view = true, m_shade = true, m_sim = true;
 
 	// oribital camera
@@ -60,7 +62,8 @@ private:
 	// geometry
 	basic_model m_model;
 
-    /** =========================== Robert Parameters ===================== */
+    /** =========================== Robert's Parameters ===================== */
+
 	// timer
 	double m_lastMillis;
 
@@ -70,8 +73,6 @@ private:
 	// utility meshes
     cgra::gl_mesh m_bbox_mesh;
     cgra::gl_mesh m_ground_plane_mesh;
-    cgra::gl_mesh m_hiRez_ball;
-
 
     // soft body geometry
 	float m_ball_radius = 4;
@@ -87,14 +88,20 @@ private:
     // mouse mode
     bool m_place_softbodies = false;
 
-    /** =========================== Ruth Parameters ===================== */
-    // Bubbles
+    /** =========================== Ruth's Parameters ===================== */
+
+    // Thickness
     int m_min = 100;
     int m_max = 700;
+
+	// Light
     float m_intensity = 0.5;
+
+	// Surface appearance
     float m_opacity = 0.2;
 	float m_speed = 2.0;
 
+	// Cube maps
     char* m_map_options[10] = { "Colosseum", "Creek", "LancellottiChapel",
                                 "Lycksele", "MountainPath", "NissiBeach",
                                 "PereaBeach", "SaintPetersBasilica", "Skansen",
@@ -103,9 +110,11 @@ private:
 
     /** =========================== Shared Parameters ===================== */
 
+	// Shaders
     GLuint m_shader_default;
     GLuint m_shader_bubble;
 
+	// Modes
 	enum m_mode { Shader, Simulation, FullDemo };
 	char* m_mode_options[3] = { "Shader", "Simulation", "Full Demo" };
 	int m_current_mode = 0;
@@ -122,6 +131,7 @@ public:
 	void render();
 	void renderGUI();
 
+	// GUI options
 	void showViewOptions();
 	void showShaderOptions();
 	void showSoftBodyOptions();
@@ -134,7 +144,7 @@ public:
 	void keyCallback(int key, int scancode, int action, int mods);
 	void charCallback(unsigned int c);
 
-	/** =========================== Robert Functions ===================== */
+	/** =========================== Robert's Functions ===================== */
 
     static void cleanMesh(cgra::mesh_builder &mesh);
 
@@ -146,10 +156,12 @@ public:
 
     void drawModel(glm::mat4 &view, glm::mat4 &proj);
 
-    /** =========================== Ruth Functions ===================== */
-    // Cube mapping
-    unsigned int loadCubemap(std::vector<std::string> cubeFaces);
-    void setUpCubeMap(char* name);
+    /** =========================== Ruth's Functions ===================== */
 
+    // Load a cubemap from a vector of image filenames
+    unsigned int loadCubemap(std::vector<std::string> cubeFaces);
+
+	// Construct the cubemap and update the shader variable
+    void setUpCubeMap(char* mapName);
 
 };
