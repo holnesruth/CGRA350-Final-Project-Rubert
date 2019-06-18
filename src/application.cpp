@@ -211,7 +211,7 @@ void Application::render() {
 
         for (auto &softbody : m_softbodies) {
             softbody.AccumulateForces();
-            softbody.IntegrateForces(m_current_mode != FullDemo, m_softbodies, m_ball_radius);
+            softbody.IntegrateForces(m_current_mode != FullDemo, m_softbodies, m_ball_radius * 1.2);
         }
 
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
