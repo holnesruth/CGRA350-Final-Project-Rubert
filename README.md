@@ -118,7 +118,7 @@ In particular, the `rgba_image`, `shader_builder`, and `mesh_builder` classes ar
 
 | File | Author | Description |
 |:----:|:------:|:------------|
-| `application.cpp` | Authors of the CGRA350 2019 framework, Ruth Holness, and Robert Wilkins |  |
-| `Softbody.cpp` | Robert Wilkins |  |
-| `bubbles.glsl` |  Ruth Holness |  |
+| `application.cpp` | Authors of the CGRA350 2019 framework, Ruth Holness, and Robert Wilkins | The main implementation of the system |
+| `Softbody.cpp` | Robert Wilkins | A class that holds the logic for the softbody simulation |
+| `bubbles.glsl` |  Ruth Holness | The shader that computes the colour and reflectance of the bubble |
 
