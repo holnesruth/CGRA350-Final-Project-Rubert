@@ -10,10 +10,6 @@ SET(sources
 	"application.hpp"
 	"application.cpp"
 
-	"skeleton.hpp"
-	"skeleton.cpp"
-	"skeleton_model.hpp"
-	"skeleton_model.cpp"
 	"Softbody.cpp"
 	"Softbody.h"
 	
