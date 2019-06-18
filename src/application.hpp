@@ -153,9 +153,9 @@ public:
 
     void createGroundplane();
 
-    void drawModel(glm::mat4 &view, glm::mat4 &proj);
-
     /** =========================== Ruth's Functions ===================== */
+
+	void drawModel(glm::mat4& view, glm::mat4& proj);
 
     // Load a cubemap from a vector of image filenames
     unsigned int loadCubemap(std::vector<std::string> cubeFaces);
