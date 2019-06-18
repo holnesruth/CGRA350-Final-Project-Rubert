@@ -8,7 +8,6 @@
 // project
 #include "opengl.hpp"
 #include "cgra/cgra_mesh.hpp"
-#include "skeleton_model.hpp"
 #include "Softbody.h"
 
 
