@@ -132,7 +132,27 @@ float snellsLaw(float theta_i, float n1, float n2) {
 
 
 /** 
- * Calculate the reflectance of light when travelling between two mediums
+ * Calculate the reflectance of a specific type of polarised light 
+ * when travelling between two mediums.
+ * 
+ * For s-polarised: theta_1 = theta_i and theta_2 = theta_t
+ * For p-polarised: theta_1 = theta_t and theta_2 = theta_i
+ *
+ * theta_1: The first angle in the ratio
+ * theta_2: The second angle in the ratio
+ * n1: The index of refraction of the material the light is leaving
+ * n2: The index of refraction of the material the light is entering
+ */
+float polarReflectance(float n1, float theta_1, float n2, float theta_2) {
+	float minus = n1*cos(theta_1) - n2*cos(theta_2);
+	float add = n1*cos(theta_1) + n2*cos(theta_2);
+
+	return pow(abs(minus/add), 2);
+}
+
+
+/** 
+ * Calculate the effective reflectance of light when travelling between two mediums
  *
  * theta_i: The angle of incidence
  * theta_t: The angle of refraction
@@ -141,19 +161,13 @@ float snellsLaw(float theta_i, float n1, float n2) {
  */
 float fresnel(float theta_i, float theta_t, float n1, float n2) {
 	// s-polarised light
-	float num = n1*cos(theta_i) - n2*cos(theta_t);
-	float den = n1*cos(theta_i) + n2*cos(theta_t);
-	float Rs = pow(abs(num/den), 2);
+	float Rs = polarReflectance(n1, theta_i, n2, theta_t);
 
 	// p-polarised light
-	num = n1*cos(theta_t) - n2*cos(theta_i);
-	den = n1*cos(theta_t) + n2*cos(theta_i);
-	float Rp = pow(abs(num/den), 2);
+	float Rp = polarReflectance(n1, theta_t, n2, theta_i);
 
 	// effective reflectance
-	float reflectance = 0.5*(Rs + Rp);
-
-	return 4.0 * reflectance;
+	return 0.5*(Rs + Rp);
 }
 
 
@@ -169,13 +183,13 @@ float fresnel(float theta_i, float theta_t, float n1, float n2) {
  */
 float calculateLightColor(float lambda, float thickness, float n1, float n2, float theta_i, float intensity) {
 	float theta_t = max(snellsLaw(theta_i, n1, n2), 0.0);
-	float reflectance = fresnel(theta_i, theta_t, n1, n2);
+	float reflectance = 4.0 * fresnel(theta_i, theta_t, n1, n2);
 
-	// Extra distance covered by rays that travel through the film before reflecting (simplified for later)
+	// Extra distance covered by rays that travel through the film before reflecting
 	float d = 2.0 * M_PI * thickness * n2 * cos(theta_t);
-	float sind = sin(d/lambda);
+	float sin_d = sin(d/lambda);
 
-	return 4.0 * intensity * reflectance * sind * sind;
+	return 4.0 * intensity * reflectance * sin_d * sin_d;
 }
 
 

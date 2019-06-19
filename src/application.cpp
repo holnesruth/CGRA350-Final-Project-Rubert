@@ -218,6 +218,8 @@ void Application::render() {
                 chrono::system_clock::now().time_since_epoch()).count();
     }
 
+	sortBubbles();
+
     /** ============ Draw Softbodies ====================== */
 
     for (auto &softbody : m_softbodies) {
@@ -315,7 +317,6 @@ void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     cout << "New soft body added for a total of:" << endl;
     cout << "\t * " << totalPoints << " Simulating points"  << endl;
     cout << "\t * " << totalSprings << " Simulating springs"  << endl;
-
 }
 
 
@@ -425,21 +426,19 @@ void Application::updateFlow() {
 
 
 // loads a cubemap texture from 6 individual texture faces
-// Tutorial source := www.learnopengl.com
-unsigned int Application::loadCubemap(vector<std::string> cubeFaces) {
-	unsigned int id;
-	glGenTextures(1, &id);
-	glBindTexture(GL_TEXTURE_CUBE_MAP, id);
+unsigned int Application::loadCubemap(vector<std::string> cubeFaceImages) {
+	unsigned int textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
 
 	int width, height, channels;
-	for (unsigned int i = 0; i < cubeFaces.size(); i++) {
-		unsigned char* imageData = stbi_load(cubeFaces[i].c_str(), &width, &height, &channels, 0);
+	for (unsigned int i = 0; i < cubeFaceImages.size(); i++) {
+		unsigned char* imageData = stbi_load(cubeFaceImages[i].c_str(), &width, &height, &channels, 0);
 		if (imageData) {
 			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, imageData);
 			stbi_image_free(imageData);
-		}
-		else {
-			std::cout << "Cubemap texture failed to load at path: " << cubeFaces[i] << std::endl;
+		} else {
+			std::cout << "Cubemap texture " << cubeFaceImages[i] << " failed to load!" << std::endl;
 			stbi_image_free(imageData);
 		}
 	}
@@ -449,7 +448,7 @@ unsigned int Application::loadCubemap(vector<std::string> cubeFaces) {
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 
-	return id;
+	return textureID;
 }
 
 
@@ -469,6 +468,25 @@ void Application::setUpCubeMap(char* mapName) {
 
 	// set up the cubemap for shading
 	m_model.cubeMap = loadCubemap(faces);
+}
+
+vec3 Application::cameraPos() {
+	mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.y, 0.3f, 1000.f);
+	mat4 view = translate(mat4(1), vec3(3, 0, -m_distance))
+		* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
+		* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
+	vec4 viewport = vec4(0, 0, m_windowsize.x, m_windowsize.y);
+	vec3 mousePos = vec3(m_mousePosition.x, viewport.w - m_mousePosition.y, 0.01);
+
+	return unProject(mousePos, view, proj, viewport);
+}
+
+void Application::sortBubbles() {
+	vec3 cam = cameraPos();
+
+	sort(m_softbodies.begin(), m_softbodies.end(), [cam](Softbody a, Softbody b) {
+		return length(cam - a.m_centroid) > length(cam - b.m_centroid);
+	});
 }
 
 
@@ -616,7 +634,7 @@ void Application::showModeChanger() {
              m_ks = 8;
              m_pressure = 300;
 
-             // clear all somebodies
+             // clear all softbodies
              m_softbodies.erase(m_softbodies.begin(), m_softbodies.end());
 
              m_softbodies.emplace_back();

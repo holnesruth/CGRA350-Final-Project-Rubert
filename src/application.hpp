@@ -38,6 +38,8 @@ struct basic_model {
 // Main application class
 //
 class Application {
+public:
+	float m_distance = 20;
 private:
 	// window
 	glm::vec2 m_windowsize;
@@ -49,7 +51,6 @@ private:
 	// oribital camera
 	float m_pitch = .86;
 	float m_yaw = -.86;
-	float m_distance = 20;
 
 	// last input
 	bool m_leftMouseDown = false;
@@ -170,4 +171,6 @@ public:
 	// Construct the cubemap and update the shader variable
     void setUpCubeMap(char* mapName);
 
+	glm::vec3 cameraPos();
+	void sortBubbles();
 };
