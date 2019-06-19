@@ -161,8 +161,10 @@ public:
 
     /** =========================== Ruth's Functions ===================== */
 
+	// Draws a model in two passes using openGL face culling
 	void drawModel(glm::mat4& view, glm::mat4& proj);
 
+	// Updates the flow timer
 	void updateFlow();
 
     // Load a cubemap from a vector of image filenames
@@ -171,6 +173,9 @@ public:
 	// Construct the cubemap and update the shader variable
     void setUpCubeMap(char* mapName);
 
+	// Calculates the position of the camera
 	glm::vec3 cameraPos();
-	void sortBubbles();
+
+	// Sorts the softbody vector by their distance from the camera
+	void sortSoftBodies();
 };

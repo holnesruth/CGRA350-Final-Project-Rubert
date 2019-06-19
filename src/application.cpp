@@ -218,7 +218,7 @@ void Application::render() {
                 chrono::system_clock::now().time_since_epoch()).count();
     }
 
-	if (m_current_mode == FullDemo) sortBubbles();
+	if (m_current_mode == FullDemo) sortSoftBodies();
 
     /** ============ Draw Softbodies ====================== */
 
@@ -481,7 +481,7 @@ vec3 Application::cameraPos() {
 	return unProject(mousePos, view, proj, viewport);
 }
 
-void Application::sortBubbles() {
+void Application::sortSoftBodies() {
 	vec3 cam = cameraPos();
 
 	sort(m_softbodies.begin(), m_softbodies.end(), [cam](Softbody a, Softbody b) {
