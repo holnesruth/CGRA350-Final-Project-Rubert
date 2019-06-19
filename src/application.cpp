@@ -201,10 +201,7 @@ void Application::render() {
 
     /** ================== Simulation Step ====================== */
 
-    if (millis - m_lastMillis > DT * 1000) {
-
-		// update flow noise parameter
-		updateFlow();        
+    if (millis - m_lastMillis > DT * 1000) {    
 
         for (auto &softbody : m_softbodies)
             softbody.updateCentroid();
@@ -214,11 +211,16 @@ void Application::render() {
             softbody.IntegrateForces(m_current_mode != FullDemo, m_softbodies, m_ball_radius * 1.2);
         }
 
+		if (m_current_mode == FullDemo) {
+			// update flow noise parameter
+			updateFlow();
+
+			sortSoftBodies();
+		}
+
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
                 chrono::system_clock::now().time_since_epoch()).count();
     }
-
-	if (m_current_mode == FullDemo) sortSoftBodies();
 
     /** ============ Draw Softbodies ====================== */
 
