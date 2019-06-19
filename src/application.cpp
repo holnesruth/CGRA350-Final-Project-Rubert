@@ -93,6 +93,8 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	    m_model.mesh = softbody.constructMesh(m_showWireframe);
 	}
 
+	//sortSoftBodies();
+
 	// Set up simulation scene
 	createBBox();
 	createGroundplane();
@@ -215,7 +217,7 @@ void Application::render() {
 			// update flow noise parameter
 			updateFlow();
 
-			sortSoftBodies();
+			//sortSoftBodies();
 		}
 
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
@@ -683,6 +685,8 @@ void Application::cursorPosCallback(double xpos, double ypos) {
 			- acos(glm::clamp((float(xpos) - whsize.x) / whsize.x, -1.0f, 1.0f)));
 		if (m_yaw > pi<float>()) m_yaw -= float(2 * pi<float>());
 		else if (m_yaw < -pi<float>()) m_yaw += float(2 * pi<float>());
+
+		//sortSoftBodies();
 	}
 
 	// updated mouse position
@@ -740,6 +744,7 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
                     softbody.applyClick(cameraPos, rayDestination, direction, m_ball_radius);
                 }
 			}
+			//sortSoftBodies();
 		}
 	}
 

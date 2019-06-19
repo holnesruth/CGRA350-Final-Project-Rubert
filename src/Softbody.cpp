@@ -151,7 +151,7 @@ void Softbody::IntegrateForces(bool useGroundPlane, std::vector<Softbody> &softb
             if (&otherSoftbody != this){
                 vec3 otherCentroid = otherSoftbody.m_centroid;
                 float dist = distance(pnt.pos, otherCentroid);
-                if (dist < ball_radius) {
+                if (dist <= ball_radius) {
                     float amountToMove = abs(dist - ball_radius);
                     vec3 directionToMove = normalize(pnt.pos - otherCentroid);
                     pnt.pos += directionToMove * amountToMove;
