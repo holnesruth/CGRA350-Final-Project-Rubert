@@ -93,8 +93,6 @@ Application::Application(GLFWwindow* window) : m_window(window) {
 	    m_model.mesh = softbody.constructMesh(m_showWireframe);
 	}
 
-	//sortSoftBodies();
-
 	// Set up simulation scene
 	createBBox();
 	createGroundplane();
@@ -217,7 +215,7 @@ void Application::render() {
 			// update flow noise parameter
 			updateFlow();
 
-			//sortSoftBodies();
+			sortSoftBodies();
 		}
 
         m_lastMillis = chrono::duration_cast<chrono::milliseconds>(
@@ -300,7 +298,7 @@ void Application::cleanMesh(mesh_builder &mesh){
 void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     m_softbodies.emplace_back();
     m_softbodies.back().initializeMesh(m_mesh, initialTransform);
-    if (m_softbodies.size() > 20){
+    if (m_softbodies.size() > m_num_sbs){
         m_softbodies.erase(m_softbodies.begin());
     }
     m_softbodies.back().m_gravity = m_gravity;
@@ -656,10 +654,10 @@ void Application::showModeChanger() {
             vec3 min = vec3(-bbox.x * 0.75, -bbox.y * 0.75, -bbox.z * 0.75);
             vec3 max = vec3(bbox.x * 0.75, bbox.y * 0.75, bbox.z * 0.75);
 
-            for (int i = 0; i < 21; ++i) {
+            for (int i = 0; i < m_num_sbs + 1; ++i) {
                 vec3 pos = glm::linearRand(min, max);
                 mat4 initialPositionTransform = translate(mat4(1.0f), pos) * scale(mat4(1.0f), vec3(m_ball_radius));
-                addNewSoftbody(initialPositionTransform, i == 20);
+                addNewSoftbody(initialPositionTransform, i == m_num_sbs);
             }
 	    }
 	}
@@ -685,8 +683,6 @@ void Application::cursorPosCallback(double xpos, double ypos) {
 			- acos(glm::clamp((float(xpos) - whsize.x) / whsize.x, -1.0f, 1.0f)));
 		if (m_yaw > pi<float>()) m_yaw -= float(2 * pi<float>());
 		else if (m_yaw < -pi<float>()) m_yaw += float(2 * pi<float>());
-
-		//sortSoftBodies();
 	}
 
 	// updated mouse position
@@ -744,7 +740,6 @@ void Application::mouseButtonCallback(int button, int action, int mods) {
                     softbody.applyClick(cameraPos, rayDestination, direction, m_ball_radius);
                 }
 			}
-			//sortSoftBodies();
 		}
 	}
 

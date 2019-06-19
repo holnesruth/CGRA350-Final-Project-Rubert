@@ -71,6 +71,7 @@ private:
 
 	// soft bodies
 	std::vector<Softbody> m_softbodies;
+	unsigned int m_num_sbs = 14;
 
 	// utility meshes
     cgra::gl_mesh m_bbox_mesh;
