@@ -218,7 +218,7 @@ void Application::render() {
                 chrono::system_clock::now().time_since_epoch()).count();
     }
 
-	sortBubbles();
+	if (m_current_mode == FullDemo) sortBubbles();
 
     /** ============ Draw Softbodies ====================== */
 
