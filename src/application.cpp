@@ -41,6 +41,7 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	glUniform2fv(glGetUniformLocation(shader, "uLightEffects"), 1, value_ptr(lightParams));
 
 	// flow noise animation step
+	glUniform1f(glGetUniformLocation(shader, "uShowNoise"), showNoise);
 	glUniform1f(glGetUniformLocation(shader, "uTime"), time);
 	glUniform1i(glGetUniformLocation(shader, "uOctaves"), flowOctaves);
 	glUniform2fv(glGetUniformLocation(shader, "uFlowSpeeds"), 1, value_ptr(flowSpeeds));
@@ -274,15 +275,14 @@ void Application::cleanMesh(mesh_builder &mesh){
                 // delete the duplicate
                 mesh.vertices.erase(next(begin(mesh.vertices), i));
 
-                // go through the list of verticies
+                // go through the list of indices
                 for (int z = i; z < mesh.indices.size(); z++) {
                     // if they were pointing at the deleted index
                     if (mesh.indices.at(z) == i) {
                         // change them to point at the found duplicate index
                         mesh.indices.at(z) = j;
-                        // if they were pointing at a vertex after the deleted index
-                    }
-                    else if (mesh.indices.at(z) > i) {
+                    } // if they were pointing at a vertex after the deleted index
+					else if (mesh.indices.at(z) > i) {
                         // subtract one to make sure they still point at the same vertex as before
                         // (because we deleted one and the indices all shift over by one)
                         mesh.indices.at(z) = mesh.indices.at(z) - 1;
@@ -427,6 +427,30 @@ void Application::updateFlow() {
 }
 
 
+vec3 Application::cameraPos() {
+	mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.y, 0.3f, 1000.f);
+	mat4 view = translate(mat4(1), vec3(3, 0, -m_distance))
+		* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
+		* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
+	vec4 viewport = vec4(0, 0, m_windowsize.x, m_windowsize.y);
+	vec3 mousePos = vec3(m_mousePosition.x, viewport.w - m_mousePosition.y, 0.01);
+
+	return unProject(mousePos, view, proj, viewport);
+}
+
+
+void Application::sortSoftBodies() {
+	vec3 cam = cameraPos();
+
+	sort(m_softbodies.begin(),
+		 m_softbodies.end(), 
+		 [cam](Softbody a, Softbody b) {
+			 return length(cam - a.m_centroid) > length(cam - b.m_centroid);
+		 }
+	);
+}
+
+
 // loads a cubemap texture from 6 individual texture faces
 unsigned int Application::loadCubemap(vector<std::string> cubeFaceImages) {
 	unsigned int textureID;
@@ -470,25 +494,6 @@ void Application::setUpCubeMap(char* mapName) {
 
 	// set up the cubemap for shading
 	m_model.cubeMap = loadCubemap(faces);
-}
-
-vec3 Application::cameraPos() {
-	mat4 proj = perspective(1.f, float(m_windowsize.x) / m_windowsize.y, 0.3f, 1000.f);
-	mat4 view = translate(mat4(1), vec3(3, 0, -m_distance))
-		* rotate(mat4(1), m_pitch, vec3(1, 0, 0))
-		* rotate(mat4(1), m_yaw, vec3(0, 1, 0));
-	vec4 viewport = vec4(0, 0, m_windowsize.x, m_windowsize.y);
-	vec3 mousePos = vec3(m_mousePosition.x, viewport.w - m_mousePosition.y, 0.01);
-
-	return unProject(mousePos, view, proj, viewport);
-}
-
-void Application::sortSoftBodies() {
-	vec3 cam = cameraPos();
-
-	sort(m_softbodies.begin(), m_softbodies.end(), [cam](Softbody a, Softbody b) {
-		return length(cam - a.m_centroid) > length(cam - b.m_centroid);
-	});
 }
 
 
@@ -550,10 +555,10 @@ void Application::showViewOptions() {
 void Application::showShaderOptions() {
 	// setup window
 	ImGui::SetNextWindowPos(ImVec2(5, 195), ImGuiSetCond_Once);
-	ImGui::SetNextWindowSize(ImVec2(300, 240), ImGuiSetCond_Once);
+	ImGui::SetNextWindowSize(ImVec2(300, 260), ImGuiSetCond_Once);
 	ImGui::Begin("Shader Options", 0);
 
-	ImGui::PushItemWidth(-120);
+	ImGui::PushItemWidth(-130);
 
 	ImGui::SliderInt("Min Thickness", &m_min, 10, m_max);
 	ImGui::SliderInt("Max Thickness", &m_max, m_min, 2000);
@@ -561,9 +566,12 @@ void Application::showShaderOptions() {
 	ImGui::SliderFloat("Light Intensity", &m_intensity, 0.0f, 1.0f, "%.2f");
 	ImGui::SliderFloat("Opacity", &m_opacity, 0.0f, 1.0f, "%.2f");
 
-	ImGui::Checkbox("Flow", &m_flow);
+	ImGui::Checkbox("Noise", &m_model.showNoise);
 	ImGui::SameLine();
-	ImGui::SliderFloat("Speed", &m_speed, 0.1f, 10.0f, "%.2f");
+	ImGui::Checkbox("Flow", &m_flow);
+	if (!m_model.showNoise) m_flow = false;
+
+	ImGui::SliderFloat("General Flow Speed", &m_speed, 0.1f, 10.0f, "%.2f");
 	ImGui::SliderFloat("Dynamic Flow", &m_model.flowSpeeds.x, 0.1f, 0.6f, "%.2f");
 	ImGui::SliderFloat("Static Flow", &m_model.flowSpeeds.y, 0.8f, 2.4f, "%.2f");
 	ImGui::SliderInt("Noise Levels", &m_model.flowOctaves, 4, 20);
@@ -579,7 +587,7 @@ void Application::showShaderOptions() {
 
 void Application::showSoftBodyOptions() {
 	// setup window
-	ImGui::SetNextWindowPos(ImVec2(5, 440), ImGuiSetCond_Once);
+	ImGui::SetNextWindowPos(ImVec2(5, 460), ImGuiSetCond_Once);
 	ImGui::SetNextWindowSize(ImVec2(300, 190), ImGuiSetCond_Once);
 	ImGui::Begin("Simulation Options", 0);
 

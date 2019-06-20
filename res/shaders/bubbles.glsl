@@ -21,6 +21,7 @@ uniform samplerCube uCubeMap;
 uniform vec2 uThickness;
 uniform vec2 uLightEffects;
 
+uniform bool uShowNoise;
 uniform float uTime;
 uniform int uOctaves;
 uniform vec2 uFlowSpeeds;
@@ -44,7 +45,7 @@ float time = uTime*0.1;
 
 
 /**
- * Sample a noise texture with a specific uv
+ * Sample a noise texture at a specific uv coordinate
  */
 float noise(vec2 uv) {
 	return texture(uNoise, 0.1*uv).x; 
@@ -63,7 +64,7 @@ mat2 rotation_matrix(float theta) {
 
 
 /**
- * Find the gradient of a vector using the definition of the derivative
+ * Find the gradient of a vector using the definition of a derivative
  */
 vec2 gradient_vec(vec2 v) {
 	float epsilon = 0.09;
@@ -76,7 +77,7 @@ vec2 gradient_vec(vec2 v) {
 
 
 /**
- * Calculate the flow of the liquid in the soap film using a specified number of noise octaves
+ * Calculate the flow of the film using a specified number of noise octaves
  */
 float flow(vec2 pos, float octaves) {
 	float divisor = 2.0;
@@ -93,7 +94,7 @@ float flow(vec2 pos, float octaves) {
 		vec2 gradient = gradient_vec(octave*pos*0.34 + time*0.1);		//find the gradient of the point
 		gradient *= rotation_matrix(6.0*time - 2.0*pos.x - 1.2*pos.y);	//rotate the gradient
 
-		pos += gradient * 0.5;	//add the rotated gradient to the vector
+		pos += gradient*0.5;	//add the rotated gradient to the vector
 		
 		//add noise for this octave to the result
 		result += (sin(noise(pos)*octaves) + 1.0)/(2.0 * divisor);
@@ -210,7 +211,7 @@ void main() {
 	vec3 thickness = texture(uTexture, f_in.textureCoord).rgb;
 	float t = (thickness.x + thickness.y + thickness.z)/3.0;
 	float w = (1.0 - t)*minThickness + t*maxThickness;
-	w /= flow(norm.xy, uOctaves);	//introduce noise
+	if (uShowNoise) w /= flow(norm.xy, uOctaves);	//introduce noise
 
 	//find the angle of incidence of the light
 	vec4 light = uProjectionMatrix * vec4(DIRECTION, 1.0);

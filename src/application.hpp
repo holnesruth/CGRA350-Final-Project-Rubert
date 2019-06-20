@@ -29,6 +29,7 @@ struct basic_model {
 
 	float time = 100.0;
 	int flowOctaves = 7;
+	bool showNoise = true;
 
     void draw(const glm::mat4 &view, const glm::mat4 proj, bool drawAsSphere);
     void updateParams(float minThickness, float maxThickness, float intensity, float transparency);
