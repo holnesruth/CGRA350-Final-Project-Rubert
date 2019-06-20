@@ -300,7 +300,7 @@ void Application::cleanMesh(mesh_builder &mesh){
 void Application::addNewSoftbody(glm::mat4 initialTransform, bool printVerts) {
     m_softbodies.emplace_back();
     m_softbodies.back().initializeMesh(m_mesh, initialTransform);
-    if (m_softbodies.size() > m_num_sbs){
+    if (m_softbodies.size() > m_num_sb){
         m_softbodies.erase(m_softbodies.begin());
     }
     m_softbodies.back().m_gravity = m_gravity;
@@ -664,10 +664,10 @@ void Application::showModeChanger() {
             vec3 min = vec3(-bbox.x * 0.75, -bbox.y * 0.75, -bbox.z * 0.75);
             vec3 max = vec3(bbox.x * 0.75, bbox.y * 0.75, bbox.z * 0.75);
 
-            for (int i = 0; i < m_num_sbs + 1; ++i) {
+            for (int i = 0; i < m_num_sb + 1; ++i) {
                 vec3 pos = glm::linearRand(min, max);
                 mat4 initialPositionTransform = translate(mat4(1.0f), pos) * scale(mat4(1.0f), vec3(m_ball_radius));
-                addNewSoftbody(initialPositionTransform, i == m_num_sbs);
+                addNewSoftbody(initialPositionTransform, i == m_num_sb);
             }
 	    }
 	}
