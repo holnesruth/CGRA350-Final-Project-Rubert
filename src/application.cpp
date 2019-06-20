@@ -33,7 +33,6 @@ void basic_model::draw(const glm::mat4& view, const glm::mat4 proj, bool drawAsS
 	// matrices
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uProjectionMatrix"), 1, false, value_ptr(proj));
 	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelViewMatrix"), 1, false, value_ptr(modelview));
-	glUniformMatrix4fv(glGetUniformLocation(shader, "uModelMatrix"), 1, false, value_ptr(modelTransform));
 
 	// colour
 	glUniform3fv(glGetUniformLocation(shader, "uColor"), 1, value_ptr(color));
@@ -223,6 +222,23 @@ void Application::render() {
                 chrono::system_clock::now().time_since_epoch()).count();
     }
 
+	/* ==================== Draw Scene =================== */
+
+	GLuint originalShader = m_model.shader;
+	m_model.shader = m_shader_default; // set default shader for scenery
+
+	// draw bounding box
+	m_model.mesh = m_bbox_mesh;
+	drawModel(view, proj);
+
+	// if in sim mode, draw the ground plane
+	if (m_current_mode == Simulation) {
+		m_model.mesh = m_ground_plane_mesh;
+	}
+	drawModel(view, proj);
+
+	m_model.shader = originalShader; //set back to chosen shader for softbodies
+
     /** ============ Draw Softbodies ====================== */
 
     for (auto &softbody : m_softbodies) {
@@ -241,20 +257,6 @@ void Application::render() {
 
         drawModel(view, proj);
     }
-
-	/* ==================== Draw Scene =================== */
-
-    m_model.shader = m_shader_default; // set default shader for scenery
-
-    // draw bounding box
-    m_model.mesh = m_bbox_mesh;
-    drawModel(view, proj);
-
-    // if in sim mode, draw the ground plane
-    if (m_current_mode == Simulation) {
-        m_model.mesh = m_ground_plane_mesh;
-    }
-    drawModel(view, proj);
 }
 
 
@@ -574,7 +576,7 @@ void Application::showShaderOptions() {
 	ImGui::SliderFloat("General Flow Speed", &m_speed, 0.1f, 10.0f, "%.2f");
 	ImGui::SliderFloat("Dynamic Flow", &m_model.flowSpeeds.x, 0.1f, 0.6f, "%.2f");
 	ImGui::SliderFloat("Static Flow", &m_model.flowSpeeds.y, 0.8f, 2.4f, "%.2f");
-	ImGui::SliderInt("Noise Levels", &m_model.flowOctaves, 4, 20);
+	ImGui::SliderInt("Noise Levels", &m_model.flowOctaves, 3, 12);
 
 	if (ImGui::Combo("Cube Map", &m_map, m_map_options, 10)) {
 		setUpCubeMap(m_map_options[m_map]);

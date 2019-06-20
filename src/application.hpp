@@ -28,7 +28,7 @@ struct basic_model {
 	glm::vec2 flowSpeeds = glm::vec2(0.6, 1.6);
 
 	float time = 100.0;
-	int flowOctaves = 7;
+	int flowOctaves = 6;
 	bool showNoise = true;
 
     void draw(const glm::mat4 &view, const glm::mat4 proj, bool drawAsSphere);
@@ -39,19 +39,15 @@ struct basic_model {
 // Main application class
 //
 class Application {
-public:
-	float m_distance = 20;
 private:
 	// window
 	glm::vec2 m_windowsize;
 	GLFWwindow *m_window;
 
-	// gui window booleans for show/hide
-	bool m_view = true, m_shade = true, m_sim = true;
-
 	// oribital camera
 	float m_pitch = .86;
 	float m_yaw = -.86;
+	float m_distance = 20;
 
 	// last input
 	bool m_leftMouseDown = false;
@@ -93,6 +89,9 @@ private:
     bool m_place_softbodies = false;
 
     /** =========================== Ruth's Parameters ===================== */
+
+	// gui window booleans for show/hide
+	bool m_view = true, m_shade = true, m_sim = true;
 
     // Thickness
     int m_min = 100;

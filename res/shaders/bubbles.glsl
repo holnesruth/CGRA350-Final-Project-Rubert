@@ -12,7 +12,6 @@
 // uniform data
 uniform mat4 uProjectionMatrix;
 uniform mat4 uModelViewMatrix;
-uniform mat4 uModelMatrix;
 
 uniform sampler2D uTexture;
 uniform sampler2D uNoise;
@@ -42,7 +41,6 @@ const vec3 DIRECTION = vec3(1, 1, 4);
 /*============================ FLOW NOISE ============================*/
 
 float time = uTime*0.1;
-
 
 /**
  * Sample a noise texture at a specific uv coordinate
@@ -83,8 +81,9 @@ float flow(vec2 pos, float octaves) {
 	float divisor = 2.0;
 	float result = 0.0;
 	vec2 basePos = pos;
+	float octavesP = octaves + 1;
 
-	for (float octave = 1.0; octave < octaves; octave++) {
+	for (float octave = 1.0; octave < octavesP; octave++) {
 		
 		/* === Calculate flow === */
 
@@ -97,7 +96,7 @@ float flow(vec2 pos, float octaves) {
 		pos += gradient*0.5;	//add the rotated gradient to the vector
 		
 		//add noise for this octave to the result
-		result += (sin(noise(pos)*octaves) + 1.0)/(2.0 * divisor);
+		result += (sin(noise(pos)*octavesP) + 1.0)/(2.0 * divisor);
 		
 		/* === Next octave === */
 
